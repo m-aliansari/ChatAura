@@ -39,6 +39,15 @@ coverage/
 
 .history
 
+# Project docs / local config
+PROJECT_OVERVIEW.md
+docs/
+.mcp.json
+
+# Service account credentials
+service-account.json
+**/service-account.json
+
 # Yarn Berry (v2+)
 .pnp.*
 .yarn/cache

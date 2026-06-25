@@ -9,7 +9,7 @@ import {
 } from "@chakra-ui/react";
 import "../../../styles/scrollbar.css";
 
-import { MdChat } from "react-icons/md";
+import { MdAdd } from "react-icons/md";
 import { FriendsContext } from "../../../contexts/Friends/FriendsContext";
 import { useContext } from "react";
 import { AddFriendModal } from "./AddFriendModal";
@@ -29,7 +29,7 @@ export const SideBar = () => {
           <Heading size="md">Add Friend</Heading>
           <Dialog.Trigger asChild>
             <Button variant="surface">
-              <MdChat size={10} />
+              <MdAdd size={10} />
             </Button>
           </Dialog.Trigger>
           <Button
@@ -49,7 +49,10 @@ export const SideBar = () => {
             p="2rem"
             maxH="82vh"
             overflowY="auto"
-            backgroundImage="linear-gradient(to right, #131313ff, #4a4a4a)" // Gradient from dark gray to lighter gray
+            backgroundImage={{
+              base: "linear-gradient(to right, #f5f5f5, #e0e0e0)", // light gray gradient for light mode
+              _dark: "linear-gradient(to right, #131313ff, #4a4a4a)", // dark gray gradient for dark mode
+            }}
             borderRadius="12px" /* Rounded corners for a card-like design */
             boxShadow="lg" /* Soft shadow for a modern look */
           >
