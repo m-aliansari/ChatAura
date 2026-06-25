@@ -11,9 +11,10 @@ import { useFormik } from "formik";
 import { useContext, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { API_BASE_URL } from "../../../constants/api";
-import { authFormSchema } from "@realtime-chatapp/common";
-import { UserContext } from "../../../contexts/UserContext";
+import { API_ROUTES, authFormSchema } from "@realtime-chatapp/common";
 import { ROUTE_NAMES } from "../../../constants/routes";
+import { LOCAL_STORAGE_TOKEN_KEY } from "../../../constants/auth.js";
+import { UserContext } from "../../../contexts/User/UserContext.js";
 
 export const Login = () => {
   const { setUser } = useContext(UserContext);
@@ -29,7 +30,7 @@ export const Login = () => {
     onSubmit: (values, actions) => {
       const vals = { ...values };
       actions.resetForm();
-      fetch(`${API_BASE_URL}/auth/login`, {
+      fetch(`${API_BASE_URL}${API_ROUTES.AUTH.LOGIN}`, {
         method: "POST",
         credentials: "include",
         headers: {
@@ -45,6 +46,7 @@ export const Login = () => {
         .then((data) => {
           if (!data) return;
           if (data.status) return setError(data.status);
+          localStorage.setItem(LOCAL_STORAGE_TOKEN_KEY, data.token)
           setUser({ ...data });
           navigate(ROUTE_NAMES.HOME);
         })

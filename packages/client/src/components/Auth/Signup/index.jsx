@@ -11,9 +11,9 @@ import { useFormik } from "formik";
 import { useContext, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { API_BASE_URL } from "../../../constants/api";
-import { UserContext } from "../../../contexts/UserContext";
 import { ROUTE_NAMES } from "../../../constants/routes";
-import { authFormSchema } from "@realtime-chatapp/common";
+import { API_ROUTES, authFormSchema } from "@realtime-chatapp/common";
+import { UserContext } from "../../../contexts/User/UserContext.js";
 
 export const Signup = () => {
   const { setUser } = useContext(UserContext);
@@ -28,7 +28,7 @@ export const Signup = () => {
     onSubmit: (values, actions) => {
       const vals = { ...values };
       actions.resetForm();
-      fetch(`${API_BASE_URL}/auth/register`, {
+      fetch(`${API_BASE_URL}${API_ROUTES.AUTH.REGISTER}`, {
         method: "POST",
         credentials: "include",
         headers: {

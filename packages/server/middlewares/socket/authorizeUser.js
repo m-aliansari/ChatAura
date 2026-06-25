@@ -1,7 +1,16 @@
+import { jwtVerifyPromise } from "../../utils/jwt.js";
+
 export const authorizeUser = async (socket, next) => {
-    if (!socket.request.session?.user) {
+    const token = socket.handshake.auth.token
+
+    const [err, decoded] = await jwtVerifyPromise(token)
+
+    if (err || !decoded) {
+        console.log("error in authorizeUser", err);
+
         next(new Error("Not authorized"))
-    } else {
-        next()
     }
+
+    socket.user = { ...decoded }
+    next()
 }
