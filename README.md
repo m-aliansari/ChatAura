@@ -15,6 +15,16 @@ Built as a **Yarn 4 (Berry) workspaces monorepo** with a React frontend, an Expr
 - **Rate limiting** — per-IP, Redis-backed limiting on auth endpoints.
 - **Light/dark theming** with a responsive Chakra UI interface.
 
+## Screenshots
+
+The full chat interface — friends list with live online (green) / offline (red) presence, and an active conversation:
+
+![Chat interface](docs/screenshots/full-chat-interface-showing-1-online-1-offline.PNG)
+
+Live typing indicator:
+
+![Typing indicator](docs/screenshots/typing-notif.PNG)
+
 ## Tech Stack
 
 **Frontend** — React 19, Vite, Chakra UI v3 (Emotion + Framer Motion), React Router v7 (hash routing), Formik + Yup, socket.io-client, Firebase JS SDK (FCM)

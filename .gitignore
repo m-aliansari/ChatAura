@@ -41,7 +41,6 @@ coverage/
 
 # Project docs / local config
 PROJECT_OVERVIEW.md
-docs/
 .mcp.json
 
 # Service account credentials
@@ -61,4 +60,3 @@ PROJECT_OVERVIEW.md
 
 # Local dev / working artifacts (not shared)
 docs/superpowers/
-.mcp.json
