@@ -2,6 +2,7 @@ import { SOCKET_EVENTS } from "@realtime-chatapp/common"
 import { redisClient } from "../redis.js"
 import { getMessagesKey } from "./common.js"
 import { v4 as uuidv4 } from 'uuid'
+import { getFcmTokens, sendChatNotifications } from "../fcm.js";
 
 export const handleDirectMessage = async (socket, message, cb) => {
     try {
@@ -13,6 +14,13 @@ export const handleDirectMessage = async (socket, message, cb) => {
 
         await redisClient.lPush(getMessagesKey(to), messageString)
         await redisClient.lPush(getMessagesKey(from), messageString)
+
+        // Get user's FCM tokens
+        const fcmTokens = await getFcmTokens(to);
+
+        if (fcmTokens.length > 0)
+            // Send notification to all FCM tokens
+            await sendChatNotifications(fcmTokens, content, from)
 
         socket.to(to).emit(SOCKET_EVENTS.DIRECT_MESSAGE, { to, from, content, messageId })
         cb({ done: true, messageId })

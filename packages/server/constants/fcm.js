@@ -1,0 +1,1 @@
+export const REDIS_FCM_TOKENS_PREFIX = "fcm_tokens:"; // Redis key prefix for FCM tokens
