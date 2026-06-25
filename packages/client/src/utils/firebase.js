@@ -2,13 +2,13 @@ import { initializeApp } from "firebase/app";
 import { getMessaging, onMessage } from 'firebase/messaging';
 
 const firebaseConfig = {
-    apiKey: "AIzaSyBr8DFHXWEkdbWil9KWqk6hgKq5IFxDnMw",
-    authDomain: "vite-realtime-chatapp.firebaseapp.com",
-    projectId: "vite-realtime-chatapp",
-    storageBucket: "vite-realtime-chatapp.firebasestorage.app",
-    messagingSenderId: "435490843813",
-    appId: "1:435490843813:web:fbcc3d51f65b4081c9f14c",
-    measurementId: "G-N80XEQW20J"
+    apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+    appId: import.meta.env.VITE_FIREBASE_APP_ID,
+    measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 };
 
 // Initialize Firebase
