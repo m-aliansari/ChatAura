@@ -1,12 +1,19 @@
-import { useContext, useEffect } from "react";
-import { socket } from "../utils/socket.js";
-import { UserContext } from "../contexts/UserContext.jsx";
+import { useContext, useEffect, useRef } from "react";
 import { SOCKET_EVENTS } from "@realtime-chatapp/common";
 import { FriendsContext } from "../contexts/Friends/FriendsContext.js";
+import { UserContext } from "../contexts/User/UserContext.js";
+import { SocketContext } from "../contexts/Socket/SocketContext.js";
+import { MessagesContext } from "../contexts/Messages/MessagesContext.js";
 
-export const useSocketSetup = () => {
+export const useSocketSetup = (tabs) => {
   const { setUser } = useContext(UserContext);
   const { setFriendList } = useContext(FriendsContext);
+  const { setMessages } = useContext(MessagesContext);
+  const { socket } = useContext(SocketContext);
+
+  // Keep the latest tabs api without resubscribing listeners on every render.
+  const tabsRef = useRef(tabs);
+  tabsRef.current = tabs;
 
   useEffect(() => {
     socket.connect();
@@ -24,6 +31,17 @@ export const useSocketSetup = () => {
         if (friendExists) return prevList;
         return [...prevList, newFriend];
       });
+    });
+
+    socket.on(SOCKET_EVENTS.FRIEND_REMOVED, ({ user_id }) => {
+      setFriendList((prevList) =>
+        prevList.filter((friend) => friend.user_id !== user_id)
+      );
+      setMessages((prevMsgs) =>
+        prevMsgs.filter((m) => m.to !== user_id && m.from !== user_id)
+      );
+      const tabsApi = tabsRef.current;
+      if (tabsApi?.value === user_id) tabsApi.setValue(null);
     });
 
     socket.on(SOCKET_EVENTS.CONNECTION_STATUS_CHANGED, (status, username) => {
@@ -47,8 +65,9 @@ export const useSocketSetup = () => {
     return () => {
       socket.off(SOCKET_EVENTS.FRIENDS_LIST);
       socket.off(SOCKET_EVENTS.FRIEND_ADDED);
+      socket.off(SOCKET_EVENTS.FRIEND_REMOVED);
       socket.off(SOCKET_EVENTS.CONNECTION_STATUS_CHANGED);
       socket.off(SOCKET_EVENTS.CONNECTION_ERROR);
     };
-  }, [setUser, setFriendList]);
+  }, [setUser, setFriendList, setMessages, socket]);
 };
