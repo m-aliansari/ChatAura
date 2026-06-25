@@ -11,9 +11,9 @@ import { FriendsContext } from "../../contexts/Friends/FriendsContext.js";
 import { useContext, useEffect, useRef, useState } from "react";
 import { MessagesContext } from "../../contexts/Messages/MessagesContext.js";
 import { ChatBox } from "./ChatBox.jsx";
-import { socket } from "../../utils/socket.js";
 import { SOCKET_EVENTS } from "@realtime-chatapp/common";
 import { keyframes } from "@emotion/react";
+import { SocketContext } from "../../contexts/Socket/SocketContext.js";
 
 const dotPulse = keyframes(`
   0%   { opacity: 0.2; transform: scale(1); }
@@ -22,6 +22,7 @@ const dotPulse = keyframes(`
 `);
 
 export const ChatMessages = () => {
+  const { socket } = useContext(SocketContext);
   const { friendList } = useContext(FriendsContext);
   const { messages, setMessages } = useContext(MessagesContext);
   const messagesContainerRefs = useRef({});
@@ -58,7 +59,7 @@ export const ChatMessages = () => {
       socket.off(SOCKET_EVENTS.TYPING);
       socket.off(SOCKET_EVENTS.STOP_TYPING);
     };
-  }, [setMessages, currentTab]);
+  }, [setMessages, currentTab, socket]);
 
   useEffect(() => {
     const el = messagesContainerRefs.current?.[currentTab];

@@ -1,11 +1,12 @@
 import { Field as FormikField, Form, Formik } from "formik";
 import { messageFormSchema, SOCKET_EVENTS } from "@realtime-chatapp/common";
 import { Button, Field, HStack, Input, useTabsContext } from "@chakra-ui/react";
-import { socket } from "../../utils/socket.js";
 import { MessagesContext } from "../../contexts/Messages/MessagesContext.js";
 import { useContext, useRef, useState } from "react";
+import { SocketContext } from "../../contexts/Socket/SocketContext.js";
 
 export const ChatBox = ({ setNewMessage }) => {
+  const { socket } = useContext(SocketContext);
   const { value: user_id } = useTabsContext();
   const { setMessages } = useContext(MessagesContext);
   const [isTyping, setIsTyping] = useState(false);
