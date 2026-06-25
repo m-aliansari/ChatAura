@@ -3,16 +3,16 @@ import express, { json } from "express";
 import { default as helmet } from "helmet";
 import { Server } from "socket.io";
 import cors from "cors";
+import fcmRouter from "./routers/fcmRouter.js";
 import authRouter from "./routers/authRouter.js";
-import { ROUTES } from "./constants/routes.js";
 import http from 'http';
-import { sessionMiddleware, socketCompatibleMiddleware } from "./middlewares/express/session.js";
 import { corsConfig } from "./constants/cors.js";
 import { authorizeUser } from "./middlewares/socket/authorizeUser.js";
-import { SOCKET_EVENTS } from "@realtime-chatapp/common";
+import { API_ROUTES, SOCKET_EVENTS } from "@realtime-chatapp/common";
 import { redisClient } from "./utils/redis.js";
 import { handleDirectMessage } from "./utils/socket/directMessage.js";
 import { handleSocketAddFriend } from "./utils/socket/handleSocketAddFriend.js";
+import { handleRemoveFriend } from "./utils/socket/handleRemoveFriend.js";
 import { handleDisconnect } from "./utils/socket/handleDisconnect.js";
 import { initializeUser } from "./utils/socket/initializeUser.js";
 import { disconnectTimers } from "./constants/socket.js";
@@ -30,14 +30,14 @@ const socketio = new Server(server, {
 app.use(helmet())
 app.use(cors(corsConfig))
 app.use(json())
-app.use(sessionMiddleware)
 
 // routers
-app.use(ROUTES.AUTH.BASE, authRouter)
-app.set("trust proxy", 1) 
+app.use(API_ROUTES.AUTH.BASE, authRouter)
+app.use(API_ROUTES.FCM.BASE, fcmRouter);
+app.set("trust proxy", 1)
 
 // socket middlewares
-socketio.use(socketCompatibleMiddleware(sessionMiddleware))
+// socketio.use(socketCompatibleMiddleware(sessionMiddleware))
 socketio.use(authorizeUser)
 
 socketio.on("connection", async socket => {
@@ -49,6 +49,7 @@ socketio.on("connection", async socket => {
     }
 
     socket.on(SOCKET_EVENTS.ADD_FRIEND, (username, cb) => { handleSocketAddFriend(socket, username, cb) })
+    socket.on(SOCKET_EVENTS.REMOVE_FRIEND, (friend, cb) => { handleRemoveFriend(socket, friend, cb) })
     socket.on(SOCKET_EVENTS.DIRECT_MESSAGE, (message, cb) => { handleDirectMessage(socket, message, cb) })
     socket.on(SOCKET_EVENTS.DISCONNECT, () => {
         const timer = setTimeout(() => {
@@ -72,7 +73,7 @@ socketio.on("connection", async socket => {
     });
 })
 
-const PORT = process.env.PORT; 
+const PORT = process.env.PORT;
 server.listen(PORT, () => {
     console.log("Server listening on port 4000");
 })

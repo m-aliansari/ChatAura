@@ -1,16 +1,18 @@
 import { Router } from 'express'
-import { ROUTES } from '../constants/routes.js'
 import validateForm from '../middlewares/express/validateForm.js'
-import { handleCheckLogin, handleLogin, handleRegister } from '../controllers/authController.js'
 import { rateLimiter } from "../middlewares/express/rateLimiter.js"
+import { handleCheckLogin } from '../controllers/authController/handleCheckLogin.js'
+import { handleLogin } from '../controllers/authController/handleLogin.js'
+import { handleRegister } from '../controllers/authController/handleRegister.js'
+import { API_ROUTES } from '@realtime-chatapp/common'
 const router = Router()
 
 router
-    .route(ROUTES.AUTH.SPECIFIC.LOGIN)
+    .route(API_ROUTES.AUTH.SPECIFIC.LOGIN)
     .get(handleCheckLogin)
     .post(rateLimiter(60, 10), validateForm, handleLogin)
 
 router
-    .post(ROUTES.AUTH.SPECIFIC.REGISTER, rateLimiter(60, 5), validateForm, handleRegister)
+    .post(API_ROUTES.AUTH.SPECIFIC.REGISTER, rateLimiter(60, 5), validateForm, handleRegister)
 
 export default router

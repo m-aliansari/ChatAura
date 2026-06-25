@@ -5,8 +5,8 @@ import { getFriendsListKey, getHashMapKey, getMessagesKey } from "./common.js";
 
 
 export const initializeUser = async (socket) => {
-    socket.user = { ...socket.request.session.user };
     socket.join(socket.user.user_id);
+    
     await redisClient.hSet(
         getHashMapKey(socket.user.username),
         {

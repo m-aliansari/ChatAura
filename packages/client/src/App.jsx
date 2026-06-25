@@ -1,6 +1,6 @@
 import { ColorModeButton } from "./components/ui/color-mode";
 import { Views } from "./components/Views";
-import UserContextProvider from "./contexts/UserContext";
+import UserContextProvider from "./contexts/User/UserContextProvider.jsx";
 
 function App() {
   return (

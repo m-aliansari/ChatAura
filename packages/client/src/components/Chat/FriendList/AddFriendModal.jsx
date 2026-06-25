@@ -9,15 +9,20 @@ import {
 import { TextField } from "../../common/TextField";
 import { Form, Formik } from "formik";
 import { friendFormSchema, SOCKET_EVENTS } from "@realtime-chatapp/common";
-import { socket } from "../../../utils/socket.js";
+
 import { useContext, useEffect, useState } from "react";
 import { FriendsContext } from "../../../contexts/Friends/FriendsContext.js";
+import { SocketContext } from "../../../contexts/Socket/SocketContext.js";
 
 export const AddFriendModal = () => {
+  const { socket } = useContext(SocketContext);
   const [error, setError] = useState("");
   const dialog = useDialogContext();
   const { setFriendList } = useContext(FriendsContext);
   const handleSubmit = (values, actions) => {
+    console.log("form submitted");
+    console.log(socket);
+    
     socket.emit(
       SOCKET_EVENTS.ADD_FRIEND,
       values.username,

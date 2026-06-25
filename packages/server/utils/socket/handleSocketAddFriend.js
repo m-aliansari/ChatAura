@@ -15,7 +15,7 @@ export const handleSocketAddFriend = async (socket, username, cb) => {
         key
     );
 
-    if (!friend) {
+    if (!friend || !Object.keys(friend).length) {
         cb({ done: false, errorMsg: "No such user exists!" });
         return;
     }

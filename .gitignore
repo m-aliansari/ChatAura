@@ -45,3 +45,11 @@ coverage/
 .yarn/unplugged
 .yarn/build-state.yml
 .yarn/install-state.gz
+
+service-account.json
+
+PROJECT_OVERVIEW.md
+
+# Local dev / working artifacts (not shared)
+docs/superpowers/
+.mcp.json

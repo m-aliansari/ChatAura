@@ -1,4 +1,4 @@
-import { CHECK_USER_EXISTS } from "../queries/users.js"
+import { CHECK_USER_EXISTS } from "../queries/auth.js"
 import { pool } from "./postgres.js"
 
 export const checkUserExists = async username => {
@@ -13,7 +13,7 @@ export const checkUserExists = async username => {
         return false
     } catch (error) {
         console.log("error in checkUserExists");
-        
+
         console.log(error);
 
         return false
