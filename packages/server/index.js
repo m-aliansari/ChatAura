@@ -37,7 +37,6 @@ app.use(API_ROUTES.FCM.BASE, fcmRouter);
 app.set("trust proxy", 1)
 
 // socket middlewares
-// socketio.use(socketCompatibleMiddleware(sessionMiddleware))
 socketio.use(authorizeUser)
 
 socketio.on("connection", async socket => {

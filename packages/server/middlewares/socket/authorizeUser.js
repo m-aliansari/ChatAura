@@ -8,7 +8,7 @@ export const authorizeUser = async (socket, next) => {
     if (err || !decoded) {
         console.log("error in authorizeUser", err);
 
-        next(new Error("Not authorized"))
+        return next(new Error("Not authorized"))
     }
 
     socket.user = { ...decoded }

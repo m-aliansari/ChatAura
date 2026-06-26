@@ -10,11 +10,6 @@ import { checkUserExists } from "../../utils/users.js"
  */
 
 export const handleCheckLogin = async (req, res) => {
-    // if (req.session.user && req.session.user.username) {
-    //     return res.json({ loggedIn: true, username: req.session.user.username })
-    // } else {
-    //     return res.json({ loggedIn: false })
-    // }
     const token = getJwtTokenFromRequest(req)
     if (!token) return res.json({ loggedIn: false })
 

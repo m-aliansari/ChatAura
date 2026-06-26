@@ -43,7 +43,7 @@ There is **no test suite** in this repo.
 ## Architecture
 
 ### Auth: JWT, not sessions
-Despite `express-session`/`connect-redis` being dependencies, session middleware is commented out. Auth is JWT-based:
+There is no session middleware; auth is JWT-based:
 - `POST /auth/login` and `/auth/register` return `{ loggedIn, token }`. Token is a JWT (3h expiry) signed with `JWT_SECRET`, payload `{ username, user_id, id }`.
 - Client stores the token in `localStorage` and sends it as `Authorization: Bearer <token>` on HTTP and as `socket.handshake.auth.token` on the WebSocket.
 - Socket connections are gated by the `authorizeUser` middleware (`middlewares/socket/authorizeUser.js`), which verifies the JWT and attaches `socket.user`.
