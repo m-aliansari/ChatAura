@@ -15,7 +15,7 @@ import { handleSocketAddFriend } from "./utils/socket/handleSocketAddFriend.js";
 import { handleRemoveFriend } from "./utils/socket/handleRemoveFriend.js";
 import { handleDisconnect } from "./utils/socket/handleDisconnect.js";
 import { initializeUser } from "./utils/socket/initializeUser.js";
-import { disconnectTimers } from "./constants/socket.js";
+import { disconnectTimers, DISCONNECT_GRACE_MS } from "./constants/socket.js";
 
 redisClient.connect().catch(console.error);
 
@@ -54,7 +54,7 @@ socketio.on("connection", async socket => {
         const timer = setTimeout(() => {
             handleDisconnect(socket);
             disconnectTimers.delete(socket.user.username);
-        }, 3000);
+        }, DISCONNECT_GRACE_MS);
 
         disconnectTimers.set(socket.user.username, timer);
     })

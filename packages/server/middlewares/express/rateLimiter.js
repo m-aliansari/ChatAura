@@ -10,6 +10,9 @@ import { redisClient } from "../../utils/redis.js"
     * @returns {import("express").Response | void} 
 */
 export const rateLimiter = (secondsLimit, limitAmount) => async (req, res, next) => {
+    // Test/CI seam: skip throttling (e.g. E2E, where many requests share one IP).
+    if (process.env.DISABLE_RATE_LIMIT === "true") return next()
+
     const ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress
     const key = `${appName}:rate-limit:${ip}`
 
