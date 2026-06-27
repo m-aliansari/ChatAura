@@ -7,7 +7,12 @@
         "dev:server": "yarn workspace @realtime-chatapp/server dev",
         "dev:client": "yarn workspace @realtime-chatapp/client dev",
         "build:client": "yarn workspace @realtime-chatapp/client build",
-        "start": "yarn workspace @realtime-chatapp/server start"
+        "start": "yarn workspace @realtime-chatapp/server start",
+        "lint": "yarn workspace @realtime-chatapp/client lint",
+        "test": "yarn workspace @realtime-chatapp/common test ; yarn workspace @realtime-chatapp/server test ; yarn workspace @realtime-chatapp/client test",
+        "test:integration": "yarn workspace @realtime-chatapp/server test:integration",
+        "test:e2e": "yarn workspace @realtime-chatapp/client test:e2e",
+        "test:all": "yarn test && yarn test:integration && yarn test:e2e"
     },
     "workspaces": [
         "packages/*"

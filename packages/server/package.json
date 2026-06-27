@@ -21,12 +21,19 @@
     "scripts": {
         "dev": "nodemon index.js",
         "start": "node index.js",
+        "test": "vitest run",
+        "test:watch": "vitest",
+        "test:integration": "vitest run --config vitest.integration.config.js",
         "migrate:up": "node-pg-migrate up",
         "migrate:down": "node-pg-migrate down",
         "migrate:redo": "node-pg-migrate redo",
         "migrate:create": "node-pg-migrate create"
     },
     "devDependencies": {
-        "node-pg-migrate": "^8.0.3"
+        "@testcontainers/postgresql": "^12.0.3",
+        "@testcontainers/redis": "^12.0.3",
+        "node-pg-migrate": "^8.0.3",
+        "socket.io-client": "^4.8.3",
+        "vitest": "^4.1.9"
     }
 }

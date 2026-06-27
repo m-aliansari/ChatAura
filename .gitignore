@@ -37,6 +37,12 @@ uploads/
 coverage/
 *.xml
 
+# Playwright
+test-results/
+playwright-report/
+playwright/.cache/
+blob-report/
+
 .history
 
 # Project docs / local config

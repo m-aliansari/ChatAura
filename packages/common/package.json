@@ -7,7 +7,14 @@
     "exports": {
         ".": "./index.js"
     },
+    "scripts": {
+        "test": "vitest run",
+        "test:watch": "vitest"
+    },
     "dependencies": {
         "yup": "^1.6.1"
+    },
+    "devDependencies": {
+        "vitest": "^4.1.9"
     }
 }
