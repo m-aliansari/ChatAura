@@ -17,7 +17,7 @@ import { UserContext } from "../../../contexts/User/UserContext.js";
 
 export const Signup = () => {
   const { setUser } = useContext(UserContext);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState("");
   const navigate = useNavigate();
   const formik = useFormik({
     initialValues: {
@@ -36,20 +36,19 @@ export const Signup = () => {
         },
         body: JSON.stringify(vals),
       })
-        .catch((err) => setError(err))
         .then((res) => {
-          if (!res || !res.ok || res.status >= 400) return;
+          if (!res || !res.ok || res.status >= 400) return setError("Something went wrong, please try again");
           return res.json();
         })
         .then((data) => {
-          if (!data) return;
+          if (!data) return setError("Something went wrong, please try again");
           if (data.status) return setError(data.status);
           setUser({ ...data });
           navigate(ROUTE_NAMES.HOME);
         })
         .catch((err) => {
-          return setError(err);
-        });
+          return setError("Something went wrong, please try again");
+        })
     },
   });
   return (

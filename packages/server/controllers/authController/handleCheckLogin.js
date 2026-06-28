@@ -21,7 +21,7 @@ export const handleCheckLogin = async (req, res) => {
 
     const userExists = await checkUserExists(decoded.username)
 
-    if (!userExists) res.json({ loggedIn: false })
+    if (!userExists) return res.json({ loggedIn: false })
 
     if (err) return res.json({ loggedIn: false })
 

@@ -13,7 +13,7 @@ const ZERO_WIDTH = String.fromCharCode(0x200b)
 const RTL_OVERRIDE = String.fromCharCode(0x202e)
 
 describe("authFormSchema — adversarial input", () => {
-    it("rejects a whitespace-only username (6 spaces passes min length today)", async () => {
+    it("rejects a whitespace-only username", async () => {
         await rejects(authFormSchema, { username: "      ", password: "secret1" })
     })
 
@@ -21,13 +21,20 @@ describe("authFormSchema — adversarial input", () => {
         await rejects(authFormSchema, { username: "validuser", password: "      " })
     })
 
-    it("trims surrounding whitespace before validating", async () => {
-        const result = await authFormSchema.validate({
-            username: "  alice1  ",
-            password: "  secret1  ",
-        })
-        expect(result.username).toBe("alice1")
-        expect(result.password).toBe("secret1")
+    it("rejects leading white space in the username", async () => {
+        await rejects(authFormSchema, { username: "   validuser", password: "secret1" })
+    })
+
+    it("rejects trailing white space in the username", async () => {
+        await rejects(authFormSchema, { username: "validuser   ", password: "secret1" })
+    })
+
+    it("rejects leading white space in the password", async () => {
+        await rejects(authFormSchema, { username: "validuser", password: "      secret1" })
+    })
+
+    it("rejects trailing white space in the password", async () => {
+        await rejects(authFormSchema, { username: "validuser   ", password: "secret1   " })
     })
 
     it("rejects a username made of only tabs/newlines", async () => {

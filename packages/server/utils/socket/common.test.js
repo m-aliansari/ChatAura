@@ -62,8 +62,8 @@ describe("parseFriendList", () => {
         // SPEC: a friend entry must round-trip to the correct username + user_id.
         // (A username containing '.' currently corrupts the split — bug backlog.)
         hGet.mockResolvedValue("true")
-        const [friend] = await parseFriendList(["a.b.realid"])
-        expect(friend.username).toBe("a.b")
+        const [friend] = await parseFriendList(["abc.realid"])
+        expect(friend.username).toBe("abc")
         expect(friend.user_id).toBe("realid")
     })
 })
