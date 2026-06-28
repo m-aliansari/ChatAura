@@ -25,7 +25,9 @@ export const handleSocketAddFriend = async (socket, username, cb) => {
         0, -1
     );
 
-    if (currentFriendList?.length && currentFriendList.indexOf(username) !== -1) {
+    const entry = [username, friend.user_id].join(".");
+
+    if (currentFriendList?.length && currentFriendList.includes(entry)) {
         cb({ done: false, errorMsg: "Friend already added!" });
         return;
     }

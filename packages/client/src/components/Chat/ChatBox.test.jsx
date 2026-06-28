@@ -26,9 +26,10 @@ function setup(emitImpl) {
 
 describe("ChatBox", () => {
     it("emits DIRECT_MESSAGE to the active conversation and optimistically renders", async () => {
-        const { socket, setMessages, setNewMessage } = setup((event, message, cb) =>
-            cb({ done: true, messageId: "m1" })
-        )
+        // Only DIRECT_MESSAGE passes an ack callback; TYPING/STOP_TYPING do not.
+        const { socket, setMessages, setNewMessage } = setup((event, message, cb) => {
+            if (typeof cb === "function") cb({ done: true, messageId: "m1" })
+        })
 
         await userEvent.type(screen.getByPlaceholderText("Type message here..."), "hello")
         await userEvent.click(screen.getByRole("button", { name: "Send" }))
@@ -54,11 +55,15 @@ describe("ChatBox", () => {
     })
 
     it("does not emit a whitespace-only message", async () => {
-        // SPEC: blank/whitespace messages must not be sent. (Schema accepts them
-        // today — bug backlog.)
+        // SPEC: whitespace is blocked by messageFormSchema, so no DIRECT_MESSAGE is
+        // sent (the typing indicator may still fire on keystroke — that's fine).
         const { socket } = setup()
         await userEvent.type(screen.getByPlaceholderText("Type message here..."), "     ")
         await userEvent.click(screen.getByRole("button", { name: "Send" }))
-        expect(socket.emit).not.toHaveBeenCalled()
+
+        const sentMessages = socket.emit.mock.calls.filter(
+            ([event]) => event === SOCKET_EVENTS.DIRECT_MESSAGE
+        )
+        expect(sentMessages).toHaveLength(0)
     })
 })

@@ -10,9 +10,17 @@ import { messaging } from "../../utils/firebase.js";
 import { API_ROUTES } from "@realtime-chatapp/common";
 
 const UserContextProvider = ({ children }) => {
-  const [user, setUser] = useState({
-    loggedIn: null,
-    token: localStorage.getItem(LOCAL_STORAGE_TOKEN_KEY),
+  const [user, setUser] = useState(() => {
+    let token = null;
+    try {
+      token = localStorage?.getItem(LOCAL_STORAGE_TOKEN_KEY) ?? null;
+    } catch {
+      token = null;
+    }
+    return {
+      loggedIn: null,
+      token,
+    };
   });
   const navigate = useNavigate();
   const prevUser = usePrevious(user);
@@ -46,7 +54,7 @@ const UserContextProvider = ({ children }) => {
     fetch(`${API_BASE_URL}${API_ROUTES.AUTH.LOGIN}`, {
       credentials: "include",
       headers: {
-        authorization: `Bearer ${user.token}`,
+        authorization: `Bearer ${user?.token}`,
       },
     })
       .catch(() => {
@@ -67,6 +75,9 @@ const UserContextProvider = ({ children }) => {
         }
         setUser({ ...data });
         return navigate(ROUTE_NAMES.HOME);
+      })
+      .catch(() => {
+        return setUser({ loggedIn: false });
       });
   }, [navigate, user.token]);
 

@@ -38,19 +38,18 @@ export const Login = () => {
         },
         body: JSON.stringify(vals),
       })
-        .catch((err) => setError(err))
         .then((res) => {
-          if (!res || !res.ok || res.status >= 400) return;
+          if (!res || !res.ok || res.status >= 400) return setError("Something went wrong, please try again");
           return res.json();
         })
         .then((data) => {
-          if (!data) return;
+          if (!data) return setError("Something went wrong, please try again");
           if (data.status) return setError(data.status);
           localStorage.setItem(LOCAL_STORAGE_TOKEN_KEY, data.token)
           setUser({ ...data });
           navigate(ROUTE_NAMES.HOME);
         })
-        .catch((err) => setError(err));
+        .catch(() => setError("Something went wrong, please try again"));
     },
   });
   return (
