@@ -36,6 +36,14 @@ app.use(API_ROUTES.AUTH.BASE, authRouter)
 app.use(API_ROUTES.FCM.BASE, fcmRouter);
 app.set("trust proxy", 1)
 
+// Test-only seed routes — gated behind an env flag the E2E bootstrap sets.
+// Never mounted in production.
+if (process.env.ENABLE_TEST_SEED === "true") {
+    const { default: testRouter } = await import("./routers/testRouter.js")
+    app.use("/__test", testRouter)
+    console.warn("⚠️  ENABLE_TEST_SEED=true — test seed routes mounted at /__test")
+}
+
 // socket middlewares
 socketio.use(authorizeUser)
 
