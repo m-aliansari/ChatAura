@@ -14,7 +14,9 @@ vi.mock("../../utils/redis.js", () => ({
 const { rateLimiter } = await import("./rateLimiter.js")
 
 function makeReqRes() {
-    const req = { headers: {}, socket: { remoteAddress: "1.2.3.4" } }
+    // baseUrl + path identify the route — the limiter keys per-route so one
+    // route's traffic can't drain another's budget.
+    const req = { headers: {}, socket: { remoteAddress: "1.2.3.4" }, baseUrl: "/auth", path: "/login" }
     const res = {
         statusCode: null,
         body: null,
@@ -74,9 +76,9 @@ describe("rateLimiter", () => {
 
         await rateLimiter(90, 5)(req, res, next)
 
-        expect(multiChain.incr).toHaveBeenCalledWith("realtime-chatapp:rate-limit:1.2.3.4")
+        expect(multiChain.incr).toHaveBeenCalledWith("realtime-chatapp:rate-limit:1.2.3.4:/auth/login")
         expect(multiChain.expire).toHaveBeenCalledWith(
-            "realtime-chatapp:rate-limit:1.2.3.4",
+            "realtime-chatapp:rate-limit:1.2.3.4:/auth/login",
             90
         )
     })
@@ -88,7 +90,7 @@ describe("rateLimiter", () => {
 
         await rateLimiter(60, 5)(req, res, next)
 
-        expect(multiChain.incr).toHaveBeenCalledWith("realtime-chatapp:rate-limit:9.9.9.9")
+        expect(multiChain.incr).toHaveBeenCalledWith("realtime-chatapp:rate-limit:9.9.9.9:/auth/login")
     })
 
     it("responds 500 when redis throws", async () => {

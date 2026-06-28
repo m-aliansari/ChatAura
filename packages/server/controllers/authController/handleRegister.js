@@ -4,30 +4,42 @@ import { checkUserExists } from "../../utils/users.js"
 import { pool } from "../../utils/postgres.js"
 import { jwtSignPromise } from "../../utils/jwt.js"
 import { ADD_NEW_USER } from "../../queries/auth.js"
+import { GENERIC_ERROR } from "@realtime-chatapp/common"
 
 
 export const handleRegister = async (req, res) => {
-    const userExists = await checkUserExists(req.body.username)
+    try {
+        const userExists = await checkUserExists(req.body.username)
 
-    if (userExists) return res.json({ loggedIn: false, status: "Username taken" })
+        if (userExists) return res.json({ loggedIn: false, status: "Username taken" })
 
-    const hashedPass = await hash(req.body.password, 10);
-    const newUserQuery = await pool.query(
-        ADD_NEW_USER,
-        [uuidv4(), req.body.username, hashedPass]
-    )
+        const hashedPass = await hash(req.body.password, 10);
 
-    const { username, user_id, id } = newUserQuery[0]
+        const newUser = await pool.query(
+            ADD_NEW_USER,
+            [uuidv4(), req.body.username, hashedPass]
+        )
 
-    const [err, token] = await jwtSignPromise({
-        username,
-        user_id,
-        id
-    }, {
-        expiresIn: "3h"
-    })
+        const { username, user_id, id } = newUser[0]
 
-    if (err)
-        return res.json({ loggedIn: false, status: "Something went wrong, try again later" })
-    return res.json({ loggedIn: true, token })
+        const [err, token] = await jwtSignPromise({
+            username,
+            user_id,
+            id
+        }, {
+            expiresIn: "3h"
+        })
+
+        if (err) {
+            console.error(err);
+
+            return res.json({ loggedIn: false, status: GENERIC_ERROR })
+        }
+
+        return res.json({ loggedIn: true, token })
+    } catch (err) {
+        console.error(err);
+
+        return res.json({ loggedIn: false, status: GENERIC_ERROR })
+    }
 }

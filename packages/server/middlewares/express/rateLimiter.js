@@ -14,7 +14,8 @@ export const rateLimiter = (secondsLimit, limitAmount) => async (req, res, next)
     if (process.env.DISABLE_RATE_LIMIT === "true") return next()
 
     const ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress
-    const key = `${appName}:rate-limit:${ip}`
+    // Per-route budget: one route's traffic must not exhaust another's.
+    const key = `${appName}:rate-limit:${ip}:${req.baseUrl}${req.path}`
 
     try {
         const [response] = await redisClient.multi().incr(key).expire(key, secondsLimit).exec();

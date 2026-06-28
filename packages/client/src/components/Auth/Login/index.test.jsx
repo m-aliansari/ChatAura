@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
+import { GENERIC_ERROR } from "@realtime-chatapp/common"
 import { renderWithProviders } from "../../../test/renderWithProviders.jsx"
 import { UserContext } from "../../../contexts/User/UserContext.js"
 
@@ -96,7 +97,7 @@ describe("Login", () => {
         await fillAndSubmit()
 
         expect(
-            await screen.findByText("Something went wrong, please try again")
+            await screen.findByText(GENERIC_ERROR)
         ).toBeInTheDocument()
         expect(navigateMock).not.toHaveBeenCalled()
         expect(setUser).not.toHaveBeenCalled()
@@ -110,7 +111,7 @@ describe("Login", () => {
         await fillAndSubmit()
 
         expect(
-            await screen.findByText("Something went wrong, please try again")
+            await screen.findByText(GENERIC_ERROR)
         ).toBeInTheDocument()
         expect(setUser).not.toHaveBeenCalled()
         expect(navigateMock).not.toHaveBeenCalled()

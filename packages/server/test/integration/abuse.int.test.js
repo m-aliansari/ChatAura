@@ -5,7 +5,7 @@ import { io as ioc } from "socket.io-client"
 import jwt from "jsonwebtoken"
 import { v4 as uuid } from "uuid"
 import { SOCKET_EVENTS } from "@realtime-chatapp/common"
-import { insertUser } from "./helpers.js"
+import { insertUser, befriend } from "./helpers.js"
 
 const sendMock = vi.fn().mockResolvedValue("id")
 vi.mock("../../firebase.js", () => ({
@@ -100,6 +100,7 @@ describe("authorization abuse — direct messages", () => {
         // SPEC (and current behavior): server sets `from` from socket.user.
         const alice = await insertUser()
         const bob = await insertUser()
+        await befriend(alice, bob)
         const a = connect(tokenFor(alice))
         await once(a, SOCKET_EVENTS.FRIENDS_LIST)
 
@@ -122,6 +123,7 @@ describe("authorization abuse — direct messages", () => {
         const alice = await insertUser()
         const bob = await insertUser()
         const carol = await insertUser()
+        await befriend(alice, bob)
         const a = connect(tokenFor(alice))
         const b = connect(tokenFor(bob))
         const c = connect(tokenFor(carol))

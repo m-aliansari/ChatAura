@@ -4,7 +4,7 @@ import { Server } from "socket.io"
 import { io as ioc } from "socket.io-client"
 import jwt from "jsonwebtoken"
 import { SOCKET_EVENTS } from "@realtime-chatapp/common"
-import { insertUser } from "./helpers.js"
+import { insertUser, befriend } from "./helpers.js"
 
 // handleDirectMessage pulls in firebase.js transitively; mock that boundary.
 const sendMock = vi.fn().mockResolvedValue("id")
@@ -94,6 +94,7 @@ describe("handleDirectMessage delivery", () => {
     it("delivers a message to the recipient's room and acks the sender", async () => {
         const alice = await insertUser()
         const bob = await insertUser()
+        await befriend(alice, bob)
 
         const aliceSocket = connect(tokenFor(alice))
         const bobSocket = connect(tokenFor(bob))
@@ -126,9 +127,9 @@ describe("handleDirectMessage delivery", () => {
         const socket = connect(tokenFor(alice))
         await once(socket, SOCKET_EVENTS.FRIENDS_LIST)
 
-        // null payload -> destructuring throws -> caught -> cb({ done:false })
+        // null payload -> destructuring throws -> caught -> cb({ done:false, ... })
         const ack = await socket.emitWithAck(SOCKET_EVENTS.DIRECT_MESSAGE, null)
-        expect(ack).toEqual({ done: false })
+        expect(ack.done).toBe(false)
 
         socket.close()
     })
@@ -138,6 +139,7 @@ describe("handleDirectMessage delivery", () => {
         // (initializeUser MESSAGES). The dot-delimiter corrupts "3.14" — bug backlog.
         const alice = await insertUser()
         const bob = await insertUser()
+        await befriend(alice, bob)
         const a = connect(tokenFor(alice))
         const b1 = connect(tokenFor(bob))
         await Promise.all([

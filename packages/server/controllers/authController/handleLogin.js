@@ -2,6 +2,7 @@ import { compare } from "bcrypt"
 import { pool } from "../../utils/postgres.js"
 import { jwtSignPromise } from "../../utils/jwt.js"
 import { GET_USER_BY_USERNAME } from "../../queries/auth.js"
+import { GENERIC_ERROR } from "@realtime-chatapp/common"
 
 export const handleLogin = async (req, res) => {
     try {
@@ -28,12 +29,12 @@ export const handleLogin = async (req, res) => {
         })
 
         if (err)
-            return res.json({ loggedIn: false, status: "Something went wrong, try again later" })
+            return res.json({ loggedIn: false, status: GENERIC_ERROR })
         return res.json({ loggedIn: true, token })
     } catch (error) {
         console.log("error in handle login");
 
         console.log(error);
-        return res.json({ loggedIn: false, status: "Something went wrong, try again later" })
+        return res.json({ loggedIn: false, status: GENERIC_ERROR })
     }
 }

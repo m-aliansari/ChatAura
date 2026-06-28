@@ -1,6 +1,7 @@
-import { SOCKET_EVENTS } from "@realtime-chatapp/common";
+import { GENERIC_ERROR, SOCKET_EVENTS } from "@realtime-chatapp/common";
 import { redisClient } from "../redis.js";
 import { getFriendsListKey, getHashMapKey } from "./common.js";
+import { checkFriendshipStatus } from "./friends.js";
 
 
 
@@ -20,14 +21,16 @@ export const handleSocketAddFriend = async (socket, username, cb) => {
         return;
     }
 
-    const currentFriendList = await redisClient.lRange(
-        getFriendsListKey(socket.user.username),
-        0, -1
-    );
+    const isFriendAlreadyAdded = await checkFriendshipStatus({username: socket.user.username, friendUsername: username, friendId: friend.user_id});   
 
-    const entry = [username, friend.user_id].join(".");
+    if (isFriendAlreadyAdded === null) {
+        console.error("Error occurred while checking friendship status.");
+        
+        cb({ done: false, errorMsg: GENERIC_ERROR });
+        return;
+    }
 
-    if (currentFriendList?.length && currentFriendList.includes(entry)) {
+    if (isFriendAlreadyAdded) {
         cb({ done: false, errorMsg: "Friend already added!" });
         return;
     }

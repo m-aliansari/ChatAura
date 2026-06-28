@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { REDIS_FCM_TOKENS_PREFIX } from "../../constants/fcm.js"
-import { insertUser } from "./helpers.js"
+import { insertUser, befriend } from "./helpers.js"
 
 // firebase.js require()s a gitignored service-account.json at import time, so it
 // must be mocked. This same mock is the Layer-B "Google boundary" spy.
@@ -75,10 +75,13 @@ describe("FCM token lifecycle (Layer A) — real Postgres + Redis", () => {
 })
 
 describe("handleDirectMessage notification trigger (Layer B)", () => {
-    function fakeSocket(fromUserId) {
+    function fakeSocket(fromUser) {
         const emit = vi.fn()
         return {
-            socket: { user: { user_id: fromUserId }, to: vi.fn(() => ({ emit })) },
+            socket: {
+                user: { user_id: fromUser.user_id, username: fromUser.username },
+                to: vi.fn(() => ({ emit })),
+            },
             emit,
         }
     }
@@ -86,7 +89,8 @@ describe("handleDirectMessage notification trigger (Layer B)", () => {
     it("persists the message to both chat lists and acks done", async () => {
         const from = await insertUser()
         const to = await insertUser()
-        const { socket } = fakeSocket(from.user_id)
+        await befriend(from, to)
+        const { socket } = fakeSocket(from)
         const cb = vi.fn()
 
         await handleDirectMessage(socket, { to: to.user_id, content: "hello" }, cb)
@@ -104,8 +108,9 @@ describe("handleDirectMessage notification trigger (Layer B)", () => {
     it("sends a push notification when the recipient has FCM tokens", async () => {
         const from = await insertUser()
         const to = await insertUser()
+        await befriend(from, to)
         await storeFcmToken(to.user_id, "recipient-token")
-        const { socket } = fakeSocket(from.user_id)
+        const { socket } = fakeSocket(from)
 
         await handleDirectMessage(socket, { to: to.user_id, content: "ping" }, vi.fn())
 
@@ -121,9 +126,10 @@ describe("handleDirectMessage notification trigger (Layer B)", () => {
         // (Currently only fcmTokens[0] is used — bug backlog.)
         const from = await insertUser()
         const to = await insertUser()
+        await befriend(from, to)
         await storeFcmToken(to.user_id, "device-1")
         await storeFcmToken(to.user_id, "device-2")
-        const { socket } = fakeSocket(from.user_id)
+        const { socket } = fakeSocket(from)
 
         await handleDirectMessage(socket, { to: to.user_id, content: "ping" }, vi.fn())
 
@@ -135,7 +141,8 @@ describe("handleDirectMessage notification trigger (Layer B)", () => {
     it("does NOT send a notification when the recipient has no tokens", async () => {
         const from = await insertUser()
         const to = await insertUser()
-        const { socket } = fakeSocket(from.user_id)
+        await befriend(from, to)
+        const { socket } = fakeSocket(from)
 
         await handleDirectMessage(socket, { to: to.user_id, content: "ping" }, vi.fn())
 

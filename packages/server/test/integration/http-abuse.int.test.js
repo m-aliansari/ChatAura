@@ -83,14 +83,15 @@ describe("rate-limit isolation between routes", () => {
 })
 
 describe("injection-resistant persistence", () => {
-    it("stores a SQL-injection-style username literally and keeps the table intact", async () => {
+    it("rejects a SQL-injection-style username (validation) and keeps the table intact", async () => {
+        // SPEC: usernames are restricted to [a-zA-Z0-9_], so injection
+        // metacharacters never reach the query layer — validation rejects them.
         const evil = "x';DROP--" // <= 20 chars so it exercises injection, not length
         const res = await raw(API_ROUTES.AUTH.REGISTER, {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ username: evil, password: "secret1" }),
         })
-        const data = await res.json()
-        expect(data.loggedIn).toBe(true) // parameterized query → stored as data
+        expect(res.status).toBe(422)
 
         // table still works: a normal user can still be created
         await expect(insertUser({ username: "stillworks1" })).resolves.toBeTruthy()

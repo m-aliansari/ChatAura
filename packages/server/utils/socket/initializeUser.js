@@ -23,8 +23,10 @@ export const initializeUser = async (socket) => {
     const messagesRes = await redisClient.lRange(getMessagesKey(socket.user.user_id), 0, -1)
 
     const messages = messagesRes.map(msgStr => {
-        const [messageId, to, from, content] = msgStr.split(".")
-        return { to, from, content, messageId }
+        // Format: messageId.to.from.content — messageId/to/from are dot-free
+        // uuids, so the remainder is the content (which may itself contain '.').
+        const [messageId, to, from, ...rest] = msgStr.split(".")
+        return { to, from, content: rest.join("."), messageId }
     })
 
     socket.emit(SOCKET_EVENTS.FRIENDS_LIST, parsedList);

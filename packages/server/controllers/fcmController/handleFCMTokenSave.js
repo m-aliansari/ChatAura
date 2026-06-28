@@ -1,7 +1,6 @@
 import { ADD_FCM_TOKEN } from "../../queries/fcm.js";
 import { storeFcmToken } from "../../utils/fcm.js";
 import { getJwtTokenFromRequest, jwtVerifyPromise } from "../../utils/jwt.js";
-import { pool } from "../../utils/postgres.js";
 
 /**
  * 

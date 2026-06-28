@@ -49,7 +49,7 @@ export const getFcmTokens = async (userId) => {
             GET_FCM_TOKENS,
             [userId]
         );
-        const tokens = result[0]
+        const tokens = result?.[0]?.fcm_token ?? [];
 
         // Cache the tokens in Redis
         await redisClient.set(redisKey, JSON.stringify(tokens));
@@ -64,8 +64,7 @@ export const getFcmTokens = async (userId) => {
 export async function sendChatNotifications(fcmTokens, messageText, fromUserId) {
     try {
         const tag = uuidv4(); // Unique tag for each notification
-        const message = { // Send to multiple tokens
-            token: fcmTokens[0],
+        const baseMessage = {
             notification: {
                 title: 'New Message',
                 body: messageText
@@ -85,15 +84,11 @@ export async function sendChatNotifications(fcmTokens, messageText, fromUserId) 
                 }
             }
         };
-        console.log('Notification payload:', message);
 
-        const response = await admin.messaging().send(message);
-        // const response = await Promise.all(fcmTokens.map(token => admin.messaging().send({ ...message, token })));
-
-        // console.log('Notifications sent:', response.successCount);
-        // if (response.failureCount > 0) {
-        //     console.error('Failed notifications:', response.responses.filter(r => !r.success));
-        // }
+        // A user may be logged in on multiple devices — notify each token.
+        await Promise.all(
+            fcmTokens.map((token) => admin.messaging().send({ ...baseMessage, token }))
+        );
     } catch (error) {
         console.error('Error sending notifications:', error);
     }

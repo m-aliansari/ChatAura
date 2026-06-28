@@ -5,9 +5,15 @@ WHERE username=$1
 `
 
 export const CHECK_USER_EXISTS = `
-SELECT username 
-FROM users 
+SELECT username
+FROM users
 WHERE username=$1
+`
+
+export const GET_USER_BY_USER_ID = `
+SELECT user_id
+FROM users
+WHERE user_id=$1
 `
 
 export const ADD_NEW_USER = `

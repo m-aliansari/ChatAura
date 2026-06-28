@@ -15,6 +15,7 @@ import { API_ROUTES, authFormSchema } from "@realtime-chatapp/common";
 import { ROUTE_NAMES } from "../../../constants/routes";
 import { LOCAL_STORAGE_TOKEN_KEY } from "../../../constants/auth.js";
 import { UserContext } from "../../../contexts/User/UserContext.js";
+import { GENERIC_ERROR } from "@realtime-chatapp/common";
 
 export const Login = () => {
   const { setUser } = useContext(UserContext);
@@ -39,17 +40,17 @@ export const Login = () => {
         body: JSON.stringify(vals),
       })
         .then((res) => {
-          if (!res || !res.ok || res.status >= 400) return setError("Something went wrong, please try again");
+          if (!res || !res.ok || res.status >= 400) return setError(GENERIC_ERROR);
           return res.json();
         })
         .then((data) => {
-          if (!data) return setError("Something went wrong, please try again");
+          if (!data) return setError(GENERIC_ERROR);
           if (data.status) return setError(data.status);
           localStorage.setItem(LOCAL_STORAGE_TOKEN_KEY, data.token)
           setUser({ ...data });
           navigate(ROUTE_NAMES.HOME);
         })
-        .catch(() => setError("Something went wrong, please try again"));
+        .catch(() => setError(GENERIC_ERROR));
     },
   });
   return (

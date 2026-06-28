@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from "vitest
 import express, { json } from "express"
 import { API_ROUTES } from "@realtime-chatapp/common"
 import { pool } from "../../utils/postgres.js"
+import { GENERIC_ERROR } from "@realtime-chatapp/common"
 
 let baseUrl
 let server
@@ -41,7 +42,7 @@ describe("auth resilience — server stays graceful when Postgres fails", () => 
         expect(res.ok).toBe(true) // handler caught it, responded 200 w/ status
         expect(data).toEqual({
             loggedIn: false,
-            status: "Something went wrong, try again later",
+            status: GENERIC_ERROR,
         })
     })
 
@@ -56,7 +57,7 @@ describe("auth resilience — server stays graceful when Postgres fails", () => 
 
         expect(data).toEqual({
             loggedIn: false,
-            status: "Something went wrong, try again later",
+            status: GENERIC_ERROR,
         })
     })
 })

@@ -3,6 +3,7 @@ import { screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { renderWithProviders } from "../../../test/renderWithProviders.jsx"
 import { UserContext } from "../../../contexts/User/UserContext.js"
+import { GENERIC_ERROR } from "@realtime-chatapp/common"
 
 const navigateMock = vi.fn()
 vi.mock("react-router-dom", async (importOriginal) => {
@@ -73,7 +74,7 @@ describe("Signup", () => {
         await fillAndSubmit()
 
         expect(
-            await screen.findByText("Something went wrong, please try again")
+            await screen.findByText(GENERIC_ERROR)
         ).toBeInTheDocument()
         expect(navigateMock).not.toHaveBeenCalled()
         expect(setUser).not.toHaveBeenCalled()
@@ -87,7 +88,7 @@ describe("Signup", () => {
         await fillAndSubmit()
 
         expect(
-            await screen.findByText("Something went wrong, please try again")
+            await screen.findByText(GENERIC_ERROR)
         ).toBeInTheDocument()
         expect(setUser).not.toHaveBeenCalled()
     })
