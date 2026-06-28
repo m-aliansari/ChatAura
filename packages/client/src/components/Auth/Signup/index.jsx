@@ -46,7 +46,7 @@ export const Signup = () => {
           setUser({ ...data });
           navigate(ROUTE_NAMES.HOME);
         })
-        .catch((err) => {
+        .catch(() => {
           return setError("Something went wrong, please try again");
         })
     },
