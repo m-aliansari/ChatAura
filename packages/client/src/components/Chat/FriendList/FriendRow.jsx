@@ -31,17 +31,17 @@ export const FriendRow = ({ friend }) => {
       ({ done }) => {
         if (done) {
           setFriendList((list) =>
-            list.filter((f) => f.user_id !== friend.user_id)
+            list.filter((f) => f.user_id !== friend.user_id),
           );
           setMessages((msgs) =>
             msgs.filter(
-              (m) => m.to !== friend.user_id && m.from !== friend.user_id
-            )
+              (m) => m.to !== friend.user_id && m.from !== friend.user_id,
+            ),
           );
           if (tabs.value === friend.user_id) tabs.setValue(null);
         }
         setOpen(false);
-      }
+      },
     );
   };
 
@@ -49,6 +49,8 @@ export const FriendRow = ({ friend }) => {
     <HStack w="100%" justify="space-between">
       <HStack as={Tabs.Trigger} value={friend.user_id} flex="1">
         <Circle
+          data-status={friend.connected ? "online" : "offline"}
+          aria-label={`${friend.username} is ${friend.connected ? "online" : "offline"}`}
           bg={friend.connected ? "green.500" : "red.500"}
           w="20px"
           h="20px"

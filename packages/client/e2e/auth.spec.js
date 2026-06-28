@@ -1,15 +1,14 @@
 import { test, expect } from "@playwright/test"
+import { register, loginAs, uniq } from "./fixtures/auth.js"
 
-let seq = 0
-const uniq = (base) => `${base}${Date.now().toString().slice(-6)}${seq++}`
 
-async function register(page, username, password = "secret1") {
-    await page.goto("/#/register")
-    await page.getByPlaceholder("Enter username").fill(username)
-    await page.getByPlaceholder("Enter password").fill(password)
-    await page.getByRole("button", { name: "Create Account" }).click()
-    await expect(page.getByRole("heading", { name: "Add Friend" })).toBeVisible()
-}
+test("a new user can register and reach the authenticated home (full stack)", async ({
+    page,
+}) => {
+    await register(page, uniq("solo"))
+    // Sidebar controls render -> client+server+Postgres+JWT+socket all wired.
+    await expect(page.getByRole("button", { name: "Logout" })).toBeVisible()
+})
 
 test("an existing user can log in", async ({ browser }) => {
     const username = uniq("login")
@@ -23,11 +22,7 @@ test("an existing user can log in", async ({ browser }) => {
     // ...then log in fresh (no stored token) in another context.
     const ctx2 = await browser.newContext()
     const p2 = await ctx2.newPage()
-    await p2.goto("/")
-    await p2.getByPlaceholder("Enter username").fill(username)
-    await p2.getByPlaceholder("Enter password").fill("secret1")
-    await p2.getByRole("button", { name: "Log In" }).click()
-
+    await loginAs(p2, username)
     await expect(p2.getByRole("heading", { name: "Add Friend" })).toBeVisible()
     await ctx2.close()
 })

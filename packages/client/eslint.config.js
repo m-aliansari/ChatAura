@@ -34,4 +34,26 @@ export default defineConfig([
       'react-refresh/only-export-components': 'off',
     },
   },
+  {
+    // E2E specs are Playwright (Node), not React. The react-hooks rule
+    // mis-reads Playwright's fixture `use` callback as the React `use` hook,
+    // and react-refresh/HMR is irrelevant here. Node globals merge on top of
+    // the browser globals from the base block (e2e uses both: process, and
+    // localStorage inside injected page scripts).
+    files: ['e2e/**'],
+    languageOptions: {
+      globals: globals.node,
+    },
+    rules: {
+      'react-hooks/rules-of-hooks': 'off',
+      'react-refresh/only-export-components': 'off',
+    },
+  },
+  {
+    // Tooling config files run in Node (e.g. process.env), not the browser.
+    files: ['*.config.{js,mjs}'],
+    languageOptions: {
+      globals: globals.node,
+    },
+  },
 ])

@@ -15,6 +15,7 @@ import { ROUTE_NAMES } from "../../../constants/routes";
 import { API_ROUTES, authFormSchema } from "@realtime-chatapp/common";
 import { UserContext } from "../../../contexts/User/UserContext.js";
 import { GENERIC_ERROR } from "@realtime-chatapp/common";
+import { LOCAL_STORAGE_TOKEN_KEY } from "../../../constants/auth.js";
 
 export const Signup = () => {
   const { setUser } = useContext(UserContext);
@@ -44,6 +45,7 @@ export const Signup = () => {
         .then((data) => {
           if (!data) return setError(GENERIC_ERROR);
           if (data.status) return setError(data.status);
+          localStorage.setItem(LOCAL_STORAGE_TOKEN_KEY, data.token)
           setUser({ ...data });
           navigate(ROUTE_NAMES.HOME);
         })

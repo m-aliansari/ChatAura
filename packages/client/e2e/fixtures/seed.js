@@ -29,6 +29,7 @@ export async function seedUser(request, opts = {}) {
 /**
  * Opens a fresh browser context already authenticated as `user` by injecting its
  * JWT into localStorage before the app loads. Caller is responsible for closing it.
+ * @returns {Promise<import("@playwright/test").BrowserContext>}
  */
 export async function contextAs(browser, user) {
     const context = await browser.newContext()

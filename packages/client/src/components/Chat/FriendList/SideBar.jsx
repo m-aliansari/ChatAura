@@ -28,7 +28,7 @@ export const SideBar = () => {
         <HStack justify="center" gap="15px" w="100%">
           <Heading size="md">Add Friend</Heading>
           <Dialog.Trigger asChild>
-            <Button variant="surface">
+            <Button variant="surface" aria-label="Add Friend">
               <MdAdd size={10} />
             </Button>
           </Dialog.Trigger>

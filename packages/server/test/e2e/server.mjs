@@ -31,6 +31,7 @@ delete process.env.REDIS_PASSWORD
 process.env.DISABLE_FCM = "true"
 process.env.DISABLE_RATE_LIMIT = "true" // many E2E requests share one IP
 process.env.ENABLE_TEST_SEED = "true" // exposes /__test seed routes for E2E setup
+process.env.DISCONNECT_GRACE_MS = "300" // mark offline fast in E2E (prod stays 3s)
 process.env.JWT_SECRET = process.env.JWT_SECRET ?? "test-secret-key"
 
 await import("../../index.js")

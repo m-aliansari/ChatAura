@@ -1,7 +1,6 @@
 # GitGuardian configuration
 # Test files contain dummy fixture credentials (e.g. { username, password })
 # used purely to exercise auth/validation logic — they are NOT real secrets.
-# Real secrets (JWT_SECRET, DB creds, service-account.json) live in gitignored
 # files and are never committed.
 version: 2
 secret:
