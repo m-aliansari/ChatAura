@@ -75,7 +75,7 @@ socketio.on("connection", async socket => {
 
     socket.on(SOCKET_EVENTS.STOP_TYPING, ({ to }) => {
         if (to) {
-            socket.to(to).emit(SOCKET_EVENTS.TYPING, { from: socket.user.user_id });
+            socket.to(to).emit(SOCKET_EVENTS.STOP_TYPING, { from: socket.user.user_id });
         }
     });
 })

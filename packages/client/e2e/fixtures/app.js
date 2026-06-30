@@ -11,6 +11,7 @@ export const test = base.extend({
             const page = await context.newPage();
             await page.goto("/");
             await expect(page.getByRole("button", { name: "Logout" })).toBeVisible();
+            
             return page;
         };
 
