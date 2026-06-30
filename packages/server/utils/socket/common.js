@@ -1,24 +1,25 @@
-import { appName } from "@realtime-chatapp/common"
-import { redisClient } from "../redis.js"
+import { appName } from "@realtime-chatapp/common";
+import { redisClient } from "../redis.js";
 
 export const parseFriendList = async (friendList) => {
-    const newFriendList = []
+    const newFriendList = [];
 
     for (let friend of friendList) {
-        const [friendUsername, friendUserId] = friend.split(".")
+        const [friendUsername, friendUserId] = friend.split(".");
 
-        const friendConnected = (await redisClient.hGet(getHashMapKey(friendUsername), "connected")) === "true"
+        const friendConnected =
+            (await redisClient.hGet(getHashMapKey(friendUsername), "connected")) === "true";
 
         newFriendList.push({
             username: friendUsername,
             user_id: friendUserId,
-            connected: friendConnected
-        })
+            connected: friendConnected,
+        });
     }
 
-    return newFriendList
-}
+    return newFriendList;
+};
 
-export const getHashMapKey = (username) => `${appName}:user_id:${username}`
-export const getFriendsListKey = (username) => `${appName}:friends:${username}`
-export const getMessagesKey = (user_id) => `${appName}:chat:${user_id}`
+export const getHashMapKey = (username) => `${appName}:user_id:${username}`;
+export const getFriendsListKey = (username) => `${appName}:friends:${username}`;
+export const getMessagesKey = (user_id) => `${appName}:chat:${user_id}`;

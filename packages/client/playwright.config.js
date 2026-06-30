@@ -1,20 +1,20 @@
-import { defineConfig, devices } from "@playwright/test"
+import { defineConfig, devices } from "@playwright/test";
 
 // The client build bakes in VITE_API_BASE_URL=http://localhost:4000 (.env), so
 // the E2E backend runs on 4000 and the preview client on 4011.
-const SERVER_PORT = 4000
-const CLIENT_PORT = 4011
-const CLIENT_ORIGIN = `http://localhost:${CLIENT_PORT}`
+const SERVER_PORT = 4000;
+const CLIENT_PORT = 4011;
+const CLIENT_ORIGIN = `http://localhost:${CLIENT_PORT}`;
 
 // Authenticated specs (e2e/authenticated/**) reuse a session saved here by the
 // `setup` project, so they start logged-in without replaying the login UI.
-const STORAGE_STATE = "playwright/.auth/user.json"
+const STORAGE_STATE = "playwright/.auth/user.json";
 
 const BROWSERS = [
     { name: "chromium", device: "Desktop Chrome" },
     { name: "firefox", device: "Desktop Firefox" },
     { name: "webkit", device: "Desktop Safari" },
-]
+];
 
 export default defineConfig({
     testDir: "./e2e",
@@ -68,4 +68,4 @@ export default defineConfig({
             reuseExistingServer: false,
         },
     ],
-})
+});

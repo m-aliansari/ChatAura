@@ -1,10 +1,10 @@
-import "@testing-library/jest-dom/vitest"
-import { afterEach, vi } from "vitest"
-import { cleanup } from "@testing-library/react"
+import "@testing-library/jest-dom/vitest";
+import { afterEach, vi } from "vitest";
+import { cleanup } from "@testing-library/react";
 
 afterEach(() => {
-    cleanup()
-})
+    cleanup();
+});
 
 // jsdom lacks these APIs that Chakra UI v3 / next-themes touch at render time.
 if (!window.matchMedia) {
@@ -17,7 +17,7 @@ if (!window.matchMedia) {
         addEventListener: vi.fn(),
         removeEventListener: vi.fn(),
         dispatchEvent: vi.fn(),
-    }))
+    }));
 }
 
 if (!window.ResizeObserver) {
@@ -25,9 +25,9 @@ if (!window.ResizeObserver) {
         observe() {}
         unobserve() {}
         disconnect() {}
-    }
+    };
 }
 
 if (!Element.prototype.scrollTo) {
-    Element.prototype.scrollTo = () => {}
+    Element.prototype.scrollTo = () => {};
 }

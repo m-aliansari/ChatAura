@@ -1,8 +1,8 @@
-import { describe, it, expect } from "vitest"
-import { render, screen } from "@testing-library/react"
-import { MemoryRouter, Routes, Route } from "react-router-dom"
-import { UserContext } from "../contexts/User/UserContext.js"
-import { PrivateRoutes } from "./PrivateRoutes.jsx"
+import { describe, it, expect } from "vitest";
+import { render, screen } from "@testing-library/react";
+import { MemoryRouter, Routes, Route } from "react-router-dom";
+import { UserContext } from "../contexts/User/UserContext.js";
+import { PrivateRoutes } from "./PrivateRoutes.jsx";
 
 function renderAt(user) {
     return render(
@@ -15,19 +15,19 @@ function renderAt(user) {
                     <Route path="/" element={<div>Login Page</div>} />
                 </Routes>
             </MemoryRouter>
-        </UserContext.Provider>
-    )
+        </UserContext.Provider>,
+    );
 }
 
 describe("PrivateRoutes", () => {
     it("renders the protected outlet when authenticated", () => {
-        renderAt({ loggedIn: true })
-        expect(screen.getByText("Protected Home")).toBeInTheDocument()
-    })
+        renderAt({ loggedIn: true });
+        expect(screen.getByText("Protected Home")).toBeInTheDocument();
+    });
 
     it("redirects to login when not authenticated", () => {
-        renderAt({ loggedIn: false })
-        expect(screen.getByText("Login Page")).toBeInTheDocument()
-        expect(screen.queryByText("Protected Home")).not.toBeInTheDocument()
-    })
-})
+        renderAt({ loggedIn: false });
+        expect(screen.getByText("Login Page")).toBeInTheDocument();
+        expect(screen.queryByText("Protected Home")).not.toBeInTheDocument();
+    });
+});

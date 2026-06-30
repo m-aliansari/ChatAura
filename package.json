@@ -12,10 +12,24 @@
         "test": "yarn workspace @realtime-chatapp/common test ; yarn workspace @realtime-chatapp/server test ; yarn workspace @realtime-chatapp/client test",
         "test:integration": "yarn workspace @realtime-chatapp/server test:integration",
         "test:e2e": "yarn workspace @realtime-chatapp/client test:e2e",
-        "test:all": "yarn test && yarn test:integration && yarn test:e2e"
+        "test:all": "yarn test && yarn test:integration && yarn test:e2e",
+        "format": "prettier --write .",
+        "format:check": "prettier --check .",
+        "prepare": "husky"
     },
     "workspaces": [
         "packages/*"
     ],
-    "packageManager": "yarn@4.9.2"
+    "lint-staged": {
+        "*.{js,jsx,json,md,yml,yaml}": [
+            "prettier --write"
+        ]
+    },
+    "packageManager": "yarn@4.9.2",
+    "devDependencies": {
+        "eslint-config-prettier": "^10.1.8",
+        "husky": "^9.1.7",
+        "lint-staged": "^17.0.8",
+        "prettier": "^3.9.4"
+    }
 }

@@ -4,8 +4,8 @@
 # files and are never committed.
 version: 2
 secret:
-  ignored-paths:
-    - "**/*.test.js"
-    - "**/*.test.jsx"
-    - "**/test/**"
-    - "**/e2e/**"
+    ignored-paths:
+        - "**/*.test.js"
+        - "**/*.test.jsx"
+        - "**/test/**"
+        - "**/e2e/**"

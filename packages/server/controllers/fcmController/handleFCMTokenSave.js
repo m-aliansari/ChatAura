@@ -3,33 +3,33 @@ import { storeFcmToken } from "../../utils/fcm.js";
 import { getJwtTokenFromRequest, jwtVerifyPromise } from "../../utils/jwt.js";
 
 /**
- * 
- * @param {import("express").Request} req 
- * @param {import("express").Response} res 
+ *
+ * @param {import("express").Request} req
+ * @param {import("express").Response} res
  * @returns
  */
 
 export const handleFCMTokenSave = async (req, res) => {
     const { fcmToken } = req.body;
-    const token = getJwtTokenFromRequest(req)
-    const [err, decoded] = await jwtVerifyPromise(token)
+    const token = getJwtTokenFromRequest(req);
+    const [err, decoded] = await jwtVerifyPromise(token);
 
     if (err || !decoded) {
         console.log("JWT verification failed or decoded is null");
-        return res.status(401).json({ error: 'Unauthorized' });
+        return res.status(401).json({ error: "Unauthorized" });
     }
 
     if (!token || !fcmToken) {
         console.log(`Missing token or FCM token: ${token}, ${fcmToken}`);
-        return res.status(400).json({ error: 'Missing token or FCM token' });
+        return res.status(400).json({ error: "Missing token or FCM token" });
     }
 
     try {
         await storeFcmToken(decoded.user_id, fcmToken);
 
-        return res.status(200).json({ message: 'FCM token saved successfully' });
+        return res.status(200).json({ message: "FCM token saved successfully" });
     } catch (error) {
         console.log(error);
-        return res.status(500).json({ error: 'Failed to save FCM token' });
+        return res.status(500).json({ error: "Failed to save FCM token" });
     }
-}
+};

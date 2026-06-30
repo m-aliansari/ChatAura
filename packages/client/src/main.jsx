@@ -5,11 +5,11 @@ import { Provider } from "./components/ui/provider.jsx";
 import { HashRouter } from "react-router-dom";
 
 createRoot(document.getElementById("root")).render(
-  <StrictMode>
-    <HashRouter>
-      <Provider>
-        <App />
-      </Provider>
-    </HashRouter>
-  </StrictMode>
+    <StrictMode>
+        <HashRouter>
+            <Provider>
+                <App />
+            </Provider>
+        </HashRouter>
+    </StrictMode>,
 );

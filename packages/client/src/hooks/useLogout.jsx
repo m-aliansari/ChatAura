@@ -15,60 +15,58 @@ import { ROUTE_NAMES } from "../constants/routes.js";
 // browser subscription. Bounded by a timeout because getToken() can hang
 // forever when notification permission was never granted.
 const withTimeout = (promise, ms) =>
-  Promise.race([
-    promise,
-    new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("timeout")), ms)
-    ),
-  ]);
+    Promise.race([
+        promise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), ms)),
+    ]);
 
 const cleanupFcmToken = async (token) => {
-  try {
-    const fcmToken = await withTimeout(
-      getToken(messaging, { vapidKey: FIREBASE_VAPID_KEY }),
-      4000
-    );
-    if (!fcmToken) return;
+    try {
+        const fcmToken = await withTimeout(
+            getToken(messaging, { vapidKey: FIREBASE_VAPID_KEY }),
+            4000,
+        );
+        if (!fcmToken) return;
 
-    await fetch(`${API_BASE_URL}${API_ROUTES.FCM.TOKEN.DELETE}`, {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      credentials: "include",
-      body: JSON.stringify({ fcmToken }),
-    });
-    await deleteToken(messaging);
-  } catch (error) {
-    console.error("FCM cleanup on logout failed:", error);
-  }
+        await fetch(`${API_BASE_URL}${API_ROUTES.FCM.TOKEN.DELETE}`, {
+            method: "POST",
+            headers: {
+                authorization: `Bearer ${token}`,
+                "Content-Type": "application/json",
+            },
+            credentials: "include",
+            body: JSON.stringify({ fcmToken }),
+        });
+        await deleteToken(messaging);
+    } catch (error) {
+        console.error("FCM cleanup on logout failed:", error);
+    }
 };
 
 export const useLogout = () => {
-  const { user, setUser } = useContext(UserContext);
-  const { socket } = useContext(SocketContext);
-  const { setFriendList } = useContext(FriendsContext);
-  const { setMessages } = useContext(MessagesContext);
-  const navigate = useNavigate();
+    const { user, setUser } = useContext(UserContext);
+    const { socket } = useContext(SocketContext);
+    const { setFriendList } = useContext(FriendsContext);
+    const { setMessages } = useContext(MessagesContext);
+    const navigate = useNavigate();
 
-  const logout = () => {
-    // Capture the token before we clear it — FCM cleanup needs it.
-    const token = user.token;
+    const logout = () => {
+        // Capture the token before we clear it — FCM cleanup needs it.
+        const token = user.token;
 
-    // Local logout runs immediately and is NEVER gated on FCM cleanup.
-    // (getToken can hang indefinitely if notification permission was never
-    // granted, so awaiting it here would trap the user logged-in.)
-    socket.disconnect();
-    setFriendList([]);
-    setMessages([]);
-    localStorage.removeItem(LOCAL_STORAGE_TOKEN_KEY);
-    setUser({ loggedIn: false });
-    navigate(ROUTE_NAMES.LOGIN);
+        // Local logout runs immediately and is NEVER gated on FCM cleanup.
+        // (getToken can hang indefinitely if notification permission was never
+        // granted, so awaiting it here would trap the user logged-in.)
+        socket.disconnect();
+        setFriendList([]);
+        setMessages([]);
+        localStorage.removeItem(LOCAL_STORAGE_TOKEN_KEY);
+        setUser({ loggedIn: false });
+        navigate(ROUTE_NAMES.LOGIN);
 
-    // Fire-and-forget best-effort FCM cleanup; never blocks logout.
-    cleanupFcmToken(token);
-  };
+        // Fire-and-forget best-effort FCM cleanup; never blocks logout.
+        cleanupFcmToken(token);
+    };
 
-  return logout;
+    return logout;
 };

@@ -115,22 +115,22 @@ The client uses **hash routing**, so URLs look like `http://localhost:5173/#/...
 
 Run from the repo root:
 
-| Command | Description |
-| --- | --- |
-| `yarn dev:server` | Start the backend (nodemon) |
-| `yarn dev:client` | Start the Vite dev server |
-| `yarn build:client` | Production build of the client |
-| `yarn start` | Run the backend (production entry) |
+| Command             | Description                        |
+| ------------------- | ---------------------------------- |
+| `yarn dev:server`   | Start the backend (nodemon)        |
+| `yarn dev:client`   | Start the Vite dev server          |
+| `yarn build:client` | Production build of the client     |
+| `yarn start`        | Run the backend (production entry) |
 
 Per-package:
 
-| Command | Description |
-| --- | --- |
-| `yarn workspace @realtime-chatapp/client lint` | ESLint the client |
-| `yarn workspace @realtime-chatapp/server migrate:up` | Apply migrations |
-| `yarn workspace @realtime-chatapp/server migrate:down` | Roll back the last migration |
-| `yarn workspace @realtime-chatapp/server migrate:redo` | Roll back then re-apply the last migration |
-| `yarn workspace @realtime-chatapp/server migrate:create <name>` | Scaffold a new migration |
+| Command                                                         | Description                                |
+| --------------------------------------------------------------- | ------------------------------------------ |
+| `yarn workspace @realtime-chatapp/client lint`                  | ESLint the client                          |
+| `yarn workspace @realtime-chatapp/server migrate:up`            | Apply migrations                           |
+| `yarn workspace @realtime-chatapp/server migrate:down`          | Roll back the last migration               |
+| `yarn workspace @realtime-chatapp/server migrate:redo`          | Roll back then re-apply the last migration |
+| `yarn workspace @realtime-chatapp/server migrate:create <name>` | Scaffold a new migration                   |
 
 > There is no automated test suite in this repo.
 
