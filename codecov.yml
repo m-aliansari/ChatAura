@@ -1,0 +1,40 @@
+# Codecov configuration.
+#
+# Coverage reported here is UNIT + INTEGRATION. E2E is excluded — Playwright runs
+# the app in a real browser against a separate server process, which v8/istanbul
+# cannot instrument. The `server` flag uses the MERGED unit+integration report.
+#
+# Status checks start as `informational: true` (report-only, never blocking).
+# To enforce: set `informational: false` on `patch` (and optionally `project`),
+# then require the `codecov/patch` check in the master branch protection rules.
+
+coverage:
+    status:
+        project:
+            default:
+                target: auto # ratchet: compare against the base commit
+                threshold: 1% # tolerate tiny drops
+                informational: true
+        patch:
+            default:
+                target: 80% # new/changed code must clear this bar
+                informational: true
+
+# Per-package coverage in the Codecov UI (monorepo).
+flags:
+    client:
+        paths:
+            - packages/client/
+        carryforward: true
+    server:
+        paths:
+            - packages/server/
+        carryforward: true
+    common:
+        paths:
+            - packages/common/
+        carryforward: true
+
+comment:
+    layout: "header, diff, flags, files"
+    require_changes: false

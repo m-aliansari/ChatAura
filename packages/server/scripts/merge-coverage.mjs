@@ -44,4 +44,6 @@ const context = libReport.createContext({
 });
 reports.create("text").execute(context);
 reports.create("html").execute(context);
+// lcov.info is what the Codecov upload reads for the merged server coverage.
+reports.create("lcov").execute(context);
 console.log(`\nMerged ${merged} coverage report(s) -> coverage/merged`);

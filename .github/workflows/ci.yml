@@ -95,6 +95,52 @@ jobs:
                   if-no-files-found: ignore
                   retention-days: 7
 
+    # Generates coverage and uploads it to Codecov. Informational only — this
+    # job is intentionally NOT in deploy-client's needs, so coverage never blocks
+    # a deploy. Codecov posts the project/patch status checks and PR comment
+    # itself; gating happens at merge via branch protection (see codecov.yml).
+    coverage:
+        name: Coverage
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read
+        steps:
+            - uses: actions/checkout@v4
+            - uses: actions/setup-node@v4
+              with:
+                  node-version-file: .nvmrc
+            - name: Enable Corepack
+              run: corepack enable
+            - name: Install dependencies
+              run: yarn install --immutable
+            # Server = merged unit + integration (Docker); plus client and common.
+            - name: Generate coverage
+              run: |
+                  yarn coverage:server
+                  yarn workspace @realtime-chatapp/client test --coverage
+                  yarn workspace @realtime-chatapp/common test --coverage
+            - name: Upload server coverage (unit + integration)
+              uses: codecov/codecov-action@v5
+              with:
+                  token: ${{ secrets.CODECOV_TOKEN }}
+                  files: packages/server/coverage/merged/lcov.info
+                  flags: server
+                  fail_ci_if_error: false
+            - name: Upload client coverage
+              uses: codecov/codecov-action@v5
+              with:
+                  token: ${{ secrets.CODECOV_TOKEN }}
+                  files: packages/client/coverage/lcov.info
+                  flags: client
+                  fail_ci_if_error: false
+            - name: Upload common coverage
+              uses: codecov/codecov-action@v5
+              with:
+                  token: ${{ secrets.CODECOV_TOKEN }}
+                  files: packages/common/coverage/lcov.info
+                  flags: common
+                  fail_ci_if_error: false
+
     # Fires the Netlify build hook ONLY after every check passes, on pushes to
     # master. If any job fails, this is skipped and the client never deploys.
     # (Render gates the server independently via "After CI Checks Pass".)

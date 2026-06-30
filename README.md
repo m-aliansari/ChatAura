@@ -1,5 +1,8 @@
 # ChatAura — Realtime Chat App
 
+[![CI](https://github.com/m-aliansari/ChatAura/actions/workflows/ci.yml/badge.svg)](https://github.com/m-aliansari/ChatAura/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/m-aliansari/ChatAura/branch/master/graph/badge.svg)](https://codecov.io/gh/m-aliansari/ChatAura)
+
 A full-stack, real-time messaging web app where users register, add each other as friends, and exchange direct messages over WebSockets. Includes live presence, typing indicators, and offline web-push notifications so users are alerted to new messages even when the app is closed.
 
 Built as a **Yarn 4 (Berry) workspaces monorepo** with a React frontend, an Express + Socket.io backend, and a shared package that keeps the two in sync.
