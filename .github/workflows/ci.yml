@@ -47,6 +47,11 @@ jobs:
 
             - name: E2E tests (Playwright, Docker)
               run: yarn test:e2e
+              env:
+                  # The E2E client build must point at the disposable E2E server
+                  # that playwright.config starts on :4000. Locally this comes from
+                  # packages/client/.env (gitignored, absent in CI), so set it here.
+                  VITE_API_BASE_URL: http://localhost:4000
 
             - name: Upload Playwright report
               if: ${{ failure() }}
