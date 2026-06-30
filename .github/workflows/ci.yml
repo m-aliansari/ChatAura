@@ -126,6 +126,10 @@ jobs:
                   files: packages/server/coverage/merged/lcov.info
                   flags: server
                   fail_ci_if_error: false
+                  # Upload ONLY the file above under this flag — without this,
+                  # codecov auto-searches and uploads every coverage file under
+                  # every flag, misattributing per-package coverage.
+                  disable_search: true
             - name: Upload client coverage
               uses: codecov/codecov-action@v5
               with:
@@ -133,6 +137,7 @@ jobs:
                   files: packages/client/coverage/lcov.info
                   flags: client
                   fail_ci_if_error: false
+                  disable_search: true
             - name: Upload common coverage
               uses: codecov/codecov-action@v5
               with:
@@ -140,6 +145,7 @@ jobs:
                   files: packages/common/coverage/lcov.info
                   flags: common
                   fail_ci_if_error: false
+                  disable_search: true
 
     # Fires the Netlify build hook ONLY after every check passes, on pushes to
     # master. If any job fails, this is skipped and the client never deploys.
