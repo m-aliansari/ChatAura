@@ -13,6 +13,7 @@
         "test:integration": "yarn workspace @realtime-chatapp/server test:integration",
         "test:e2e": "yarn workspace @realtime-chatapp/client test:e2e",
         "test:all": "yarn test && yarn test:integration && yarn test:e2e",
+        "coverage:server": "yarn workspace @realtime-chatapp/server coverage",
         "format": "prettier --write .",
         "format:check": "prettier --check .",
         "prepare": "husky"
@@ -27,6 +28,7 @@
     },
     "packageManager": "yarn@4.9.2",
     "devDependencies": {
+        "@vitest/coverage-v8": "^4.1.9",
         "eslint-config-prettier": "^10.1.8",
         "husky": "^9.1.7",
         "lint-staged": "^17.0.8",

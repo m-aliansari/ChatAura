@@ -6,6 +6,7 @@ playwright-report/
 test-results/
 blob-report/
 playwright/.cache/
+**/playwright/.auth/
 .yarn/
 **/service-account.json
 yarn.lock

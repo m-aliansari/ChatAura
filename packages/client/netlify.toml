@@ -1,0 +1,17 @@
+# Netlify reads this file from the configured "Package directory" (packages/client).
+# The build settings (build command, publish dir) stay configured in the Netlify
+# dashboard; this file only controls WHEN Netlify builds.
+#
+# Goal:
+#   - Pull request against master  -> BUILD a Deploy Preview (manual testing).
+#   - Push / merge to master       -> do NOT auto-deploy; the live site is only
+#                                     published by the GitHub Actions build hook,
+#                                     which fires after the test suite passes.
+#
+# How: the ignore command runs for every git-triggered build. Exit 1 = build,
+# exit 0 = cancel (per Netlify docs). PULL_REQUEST is "true" only for Deploy
+# Preview builds, so we build those and cancel everything else. Builds triggered
+# by a *build hook* bypass this ignore command entirely, so the gated production
+# deploy from CI still works.
+[build]
+  ignore = 'if [ "$PULL_REQUEST" = "true" ]; then exit 1; else exit 0; fi'

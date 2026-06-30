@@ -10,5 +10,14 @@ export default defineConfig({
         env: { JWT_SECRET: "test-secret-key" },
         include: ["**/*.test.js"],
         exclude: ["**/node_modules/**", "**/*.int.test.js", "test/integration/**"],
+        coverage: {
+            provider: "v8",
+            // json emits coverage/unit/coverage-final.json, consumed by the
+            // merge step (scripts/merge-coverage.mjs) to combine with integration.
+            reporter: ["text", "html", "json"],
+            reportsDirectory: "./coverage/unit",
+            include: ["controllers/**", "middlewares/**", "utils/**", "queries/**"],
+            exclude: ["**/*.test.js", "**/*.int.test.js", "test/**"],
+        },
     },
 });

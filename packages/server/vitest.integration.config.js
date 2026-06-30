@@ -11,5 +11,14 @@ export default defineConfig({
         fileParallelism: false,
         testTimeout: 30000,
         hookTimeout: 180000,
+        coverage: {
+            provider: "v8",
+            // Same include/exclude as the unit config so the two reports cover
+            // the same file set and merge cleanly (scripts/merge-coverage.mjs).
+            reporter: ["text", "html", "json"],
+            reportsDirectory: "./coverage/integration",
+            include: ["controllers/**", "middlewares/**", "utils/**", "queries/**"],
+            exclude: ["**/*.test.js", "**/*.int.test.js", "test/**"],
+        },
     },
 });
