@@ -1,0 +1,16 @@
+node_modules/
+dist/
+build/
+coverage/
+playwright-report/
+test-results/
+blob-report/
+playwright/.cache/
+.yarn/
+**/service-account.json
+yarn.lock
+
+# Tool-managed / vendored skill artifacts — not ours to format.
+.claude/
+.agents/
+skills-lock.json
