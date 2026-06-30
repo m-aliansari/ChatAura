@@ -20,8 +20,10 @@ jobs:
             - uses: actions/setup-node@v4
               with:
                   node-version-file: .nvmrc
-                  cache: yarn
 
+            # Corepack activates the pinned Yarn 4 (package.json packageManager).
+            # Must run before any `yarn` invocation; this is also why setup-node's
+            # `cache: yarn` is not used (it would call Yarn before Corepack).
             - name: Enable Corepack
               run: corepack enable
 
