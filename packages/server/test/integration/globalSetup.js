@@ -1,6 +1,6 @@
-import { PostgreSqlContainer } from "@testcontainers/postgresql"
-import { RedisContainer } from "@testcontainers/redis"
-import { runMigrations } from "../runMigrations.js"
+import { PostgreSqlContainer } from "@testcontainers/postgresql";
+import { RedisContainer } from "@testcontainers/redis";
+import { runMigrations } from "../runMigrations.js";
 
 /**
  * Starts one Postgres + one Redis container for the whole integration run,
@@ -8,10 +8,10 @@ import { runMigrations } from "../runMigrations.js"
  * test workers via `provide` (read back with `inject` in setup.js).
  */
 export default async function ({ provide }) {
-    const pgContainer = await new PostgreSqlContainer("postgres:16-alpine").start()
-    const redisContainer = await new RedisContainer("redis:7-alpine").start()
+    const pgContainer = await new PostgreSqlContainer("postgres:16-alpine").start();
+    const redisContainer = await new RedisContainer("redis:7-alpine").start();
 
-    await runMigrations(pgContainer.getConnectionUri())
+    await runMigrations(pgContainer.getConnectionUri());
 
     provide("pgConfig", {
         host: pgContainer.getHost(),
@@ -19,14 +19,14 @@ export default async function ({ provide }) {
         database: pgContainer.getDatabase(),
         user: pgContainer.getUsername(),
         password: pgContainer.getPassword(),
-    })
+    });
     provide("redisConfig", {
         host: redisContainer.getHost(),
         port: redisContainer.getPort(),
-    })
+    });
 
     return async () => {
-        await redisContainer.stop()
-        await pgContainer.stop()
-    }
+        await redisContainer.stop();
+        await pgContainer.stop();
+    };
 }

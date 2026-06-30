@@ -47,5 +47,5 @@ the OS notification. Verify that leg by hand before a release.
 Record pass/fail + date here when run:
 
 | Date | Tester | Result | Notes |
-|------|--------|--------|-------|
+| ---- | ------ | ------ | ----- |
 |      |        |        |       |

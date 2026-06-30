@@ -1,6 +1,6 @@
-import { render } from "@testing-library/react"
-import { MemoryRouter } from "react-router-dom"
-import { Provider } from "../components/ui/provider.jsx"
+import { render } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
+import { Provider } from "../components/ui/provider.jsx";
 
 /**
  * Renders a component inside the app's Chakra Provider + a router, so Chakra
@@ -14,5 +14,5 @@ export function renderWithProviders(ui, { route = "/", ...options } = {}) {
             </Provider>
         ),
         ...options,
-    })
+    });
 }

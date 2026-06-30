@@ -3,8 +3,6 @@ import { redisClient } from "../redis.js";
 import { getFriendsListKey, getHashMapKey } from "./common.js";
 import { checkFriendshipStatus } from "./friends.js";
 
-
-
 export const handleSocketAddFriend = async (socket, username, cb) => {
     if (username === socket.user.username) {
         cb({ done: false, errorMsg: "Cannot add self" });
@@ -12,20 +10,22 @@ export const handleSocketAddFriend = async (socket, username, cb) => {
     }
 
     const key = getHashMapKey(username);
-    const friend = await redisClient.hGetAll(
-        key
-    );
+    const friend = await redisClient.hGetAll(key);
 
     if (!friend || !Object.keys(friend).length) {
         cb({ done: false, errorMsg: "No such user exists!" });
         return;
     }
 
-    const isFriendAlreadyAdded = await checkFriendshipStatus({username: socket.user.username, friendUsername: username, friendId: friend.user_id});   
+    const isFriendAlreadyAdded = await checkFriendshipStatus({
+        username: socket.user.username,
+        friendUsername: username,
+        friendId: friend.user_id,
+    });
 
     if (isFriendAlreadyAdded === null) {
         console.error("Error occurred while checking friendship status.");
-        
+
         cb({ done: false, errorMsg: GENERIC_ERROR });
         return;
     }
@@ -37,16 +37,23 @@ export const handleSocketAddFriend = async (socket, username, cb) => {
 
     await redisClient.lPush(
         getFriendsListKey(socket.user.username),
-        [username, friend.user_id].join(".")
+        [username, friend.user_id].join("."),
     );
 
     await redisClient.lPush(
         getFriendsListKey(username),
-        [socket.user.username, socket.user.user_id].join(".")
+        [socket.user.username, socket.user.user_id].join("."),
     );
 
-    socket.to(friend.user_id).emit(SOCKET_EVENTS.FRIEND_ADDED, { ...socket.user, connected: true })
+    socket.to(friend.user_id).emit(SOCKET_EVENTS.FRIEND_ADDED, { ...socket.user, connected: true });
 
-    cb({ done: true, addedFriend: { username, user_id: friend.user_id, connected: (friend.connected ?? "false") === "true" } });
+    cb({
+        done: true,
+        addedFriend: {
+            username,
+            user_id: friend.user_id,
+            connected: (friend.connected ?? "false") === "true",
+        },
+    });
     return;
 };

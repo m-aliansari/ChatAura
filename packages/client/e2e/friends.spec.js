@@ -17,7 +17,10 @@ test("Added friends render on both users' friend lists", async ({ request, openA
     await expect(pageB.getByRole("tab", { name: userA.username })).toBeVisible();
 });
 
-test("when a friend is removed, both users' friend lists update in realtime", async ({ request, openAppAs }) => {
+test("when a friend is removed, both users' friend lists update in realtime", async ({
+    request,
+    openAppAs,
+}) => {
     const { a, b } = await seedFriendship(request);
 
     const pageA = await openAppAs(a);
@@ -32,7 +35,7 @@ test("when a friend is removed, both users' friend lists update in realtime", as
         const dialog = pageA.getByRole("dialog", { name: `Remove ${b.username}?` });
         await expect(dialog).toBeVisible();
 
-        await dialog.getByRole("button", { name: "Remove", exact: true }).click();       // CONFIRM
+        await dialog.getByRole("button", { name: "Remove", exact: true }).click(); // CONFIRM
         await expect(dialog).toBeHidden();
 
         await expect(pageA.getByRole("tab", { name: b.username })).toHaveCount(0);
@@ -41,7 +44,7 @@ test("when a friend is removed, both users' friend lists update in realtime", as
     await test.step("userB sees userA disappear from his friend list without reloading", async () => {
         await expect(pageB.getByRole("tab", { name: a.username })).toHaveCount(0);
     });
-})
+});
 
 test("Friends' statuses update in realtime", async ({ request, openAppAs }) => {
     const { a, b } = await seedFriendship(request);
@@ -53,25 +56,25 @@ test("Friends' statuses update in realtime", async ({ request, openAppAs }) => {
 
     await test.step("userB appears offline when offline", async () => {
         await expect(userBTab.locator("[data-status]")).toHaveAttribute("data-status", "offline");
-    })
+    });
 
     const pageB = await openAppAs(b);
 
     await test.step("userB appears online when he visits the app", async () => {
         await expect(userBTab.locator("[data-status]")).toHaveAttribute("data-status", "online");
-    })
+    });
 
     await test.step("userB appears offline when he closes the app", async () => {
         await pageB.context().close();
         await expect(userBTab.locator("[data-status]")).toHaveAttribute("data-status", "offline");
-    })
+    });
 
     const pageC = await openAppAs(b);
-    
+
     await expect(userBTab.locator("[data-status]")).toHaveAttribute("data-status", "online");
 
     await test.step("userB appears offline when he logs out", async () => {
         await pageC.getByRole("button", { name: "Logout" }).click();
         await expect(userBTab.locator("[data-status]")).toHaveAttribute("data-status", "offline");
-    })
-})
+    });
+});

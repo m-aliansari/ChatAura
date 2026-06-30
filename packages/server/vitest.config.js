@@ -1,4 +1,4 @@
-import { defineConfig } from "vitest/config"
+import { defineConfig } from "vitest/config";
 
 // Unit tier: pure logic, no Docker / no real services.
 // Integration tests (real Postgres + Redis via Testcontainers) live in
@@ -11,4 +11,4 @@ export default defineConfig({
         include: ["**/*.test.js"],
         exclude: ["**/node_modules/**", "**/*.int.test.js", "test/integration/**"],
     },
-})
+});

@@ -1,9 +1,9 @@
 export * from "./error.js";
 export * from "./schemas.js";
 
-import { object, string } from "yup"
+import { object, string } from "yup";
 
-export const appName = 'realtime-chatapp'
+export const appName = "realtime-chatapp";
 
 export const SOCKET_EVENTS = {
     ADD_FRIEND: "add_friend",
@@ -19,8 +19,8 @@ export const SOCKET_EVENTS = {
     TYPING: "typing",
     STOP_TYPING: "stop_typing",
     REMOVE_FRIEND: "remove_friend",
-    FRIEND_REMOVED: "friend_removed"
-}
+    FRIEND_REMOVED: "friend_removed",
+};
 
 export const API_ROUTES = {
     AUTH: {
@@ -30,7 +30,7 @@ export const API_ROUTES = {
         SPECIFIC: {
             LOGIN: "/login",
             REGISTER: "/register",
-        }
+        },
     },
     FCM: {
         BASE: "/fcm",
@@ -44,8 +44,8 @@ export const API_ROUTES = {
                 SAVE: "/token/save",
                 DELETE: "/token/delete",
             },
-            MESSAGE: "/message"
+            MESSAGE: "/message",
         },
     },
-    HOME: "/home"
-}
+    HOME: "/home",
+};

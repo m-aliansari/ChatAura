@@ -1,4 +1,4 @@
-import { defineConfig } from "vitest/config"
+import { defineConfig } from "vitest/config";
 
 // Medium tier: real Postgres + Redis via Testcontainers (needs Docker).
 export default defineConfig({
@@ -12,4 +12,4 @@ export default defineConfig({
         testTimeout: 30000,
         hookTimeout: 180000,
     },
-})
+});

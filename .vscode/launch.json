@@ -3,7 +3,7 @@
     // Hover to view descriptions of existing attributes.
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
-    "configurations": [  
+    "configurations": [
         {
             "name": "Vite debug",
             "request": "launch",
@@ -15,10 +15,7 @@
             "type": "node",
             "request": "launch",
             "name": "Express debug",
-            "skipFiles": [
-                "<node_internals>/**",
-                "node_modules/**"
-            ],
+            "skipFiles": ["<node_internals>/**", "node_modules/**"],
             "cwd": "${workspaceFolder}/packages/server",
             "program": "index.js"
         }

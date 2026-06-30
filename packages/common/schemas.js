@@ -14,15 +14,14 @@ export const authFormSchema = object({
         .trim("Password cannot contain leading or trailing whitespace")
         .min(6, "Password too short")
         .max(28, "Password too long"),
-})
+});
 
-
-export const friendFormSchema = authFormSchema.omit(['password'])
+export const friendFormSchema = authFormSchema.omit(["password"]);
 
 export const messageFormSchema = object({
     message: string()
         .required("Message required")
         .trim()
         .min(1, "Message cannot be empty")
-        .max(255, "Max length is 255")
-})
+        .max(255, "Max length is 255"),
+});

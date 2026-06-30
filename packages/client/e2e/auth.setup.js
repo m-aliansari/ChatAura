@@ -1,5 +1,5 @@
-import { test as setup } from "@playwright/test"
-import { register, loginAs, uniq, STORAGE_STATE } from "./fixtures/auth.js"
+import { test as setup } from "@playwright/test";
+import { register, loginAs, uniq, STORAGE_STATE } from "./fixtures/auth.js";
 
 // Authenticate once and persist the session so authenticated specs can reuse it
 // via `storageState` instead of replaying the login UI. The fresh DB per run
@@ -10,16 +10,16 @@ import { register, loginAs, uniq, STORAGE_STATE } from "./fixtures/auth.js"
 // the login form actually renders, with no leftover in-memory session) and
 // snapshot that clean, authenticated context — mirrors the login spec.
 setup("authenticate", async ({ browser }) => {
-    const username = uniq("seed")
+    const username = uniq("seed");
 
-    const signupCtx = await browser.newContext()
-    await register(await signupCtx.newPage(), username)
-    await signupCtx.close()
+    const signupCtx = await browser.newContext();
+    await register(await signupCtx.newPage(), username);
+    await signupCtx.close();
 
-    const loginCtx = await browser.newContext()
-    const page = await loginCtx.newPage()
-    await loginAs(page, username)
+    const loginCtx = await browser.newContext();
+    const page = await loginCtx.newPage();
+    await loginAs(page, username);
     // Captures cookies + localStorage (the JWT) for the client origin.
-    await page.context().storageState({ path: STORAGE_STATE })
-    await loginCtx.close()
-})
+    await page.context().storageState({ path: STORAGE_STATE });
+    await loginCtx.close();
+});

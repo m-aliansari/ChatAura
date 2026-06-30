@@ -1,57 +1,57 @@
-import { describe, it, expect, vi, beforeEach } from "vitest"
-import jwt from "jsonwebtoken"
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import jwt from "jsonwebtoken";
 
-const checkUserExists = vi.fn()
+const checkUserExists = vi.fn();
 vi.mock("../../utils/users.js", () => ({
     checkUserExists: (...a) => checkUserExists(...a),
-}))
+}));
 
-const { handleCheckLogin } = await import("./handleCheckLogin.js")
+const { handleCheckLogin } = await import("./handleCheckLogin.js");
 
-const SECRET = "test-secret-key" // from vitest.config.js env
+const SECRET = "test-secret-key"; // from vitest.config.js env
 
 function makeRes() {
-    return { json: vi.fn() }
+    return { json: vi.fn() };
 }
 const reqWith = (token) => ({
     headers: token ? { authorization: `Bearer ${token}` } : {},
-})
+});
 
-beforeEach(() => checkUserExists.mockReset())
+beforeEach(() => checkUserExists.mockReset());
 
 describe("handleCheckLogin", () => {
     it("returns loggedIn:false when no token is present", async () => {
-        const res = makeRes()
-        await handleCheckLogin(reqWith(null), res)
-        expect(res.json).toHaveBeenCalledWith({ loggedIn: false })
-    })
+        const res = makeRes();
+        await handleCheckLogin(reqWith(null), res);
+        expect(res.json).toHaveBeenCalledWith({ loggedIn: false });
+    });
 
     it("returns loggedIn:false for an invalid token", async () => {
-        const res = makeRes()
-        await handleCheckLogin(reqWith("not-a-jwt"), res)
-        expect(res.json).toHaveBeenCalledWith({ loggedIn: false })
-    })
+        const res = makeRes();
+        await handleCheckLogin(reqWith("not-a-jwt"), res);
+        expect(res.json).toHaveBeenCalledWith({ loggedIn: false });
+    });
 
     it("returns loggedIn:true for a valid token of an existing user", async () => {
-        checkUserExists.mockResolvedValue(true)
-        const token = jwt.sign({ username: "alice", user_id: "a1" }, SECRET)
-        const res = makeRes()
+        checkUserExists.mockResolvedValue(true);
+        const token = jwt.sign({ username: "alice", user_id: "a1" }, SECRET);
+        const res = makeRes();
 
-        await handleCheckLogin(reqWith(token), res)
+        await handleCheckLogin(reqWith(token), res);
 
-        expect(res.json).toHaveBeenCalledWith({ loggedIn: true, token })
-    })
+        expect(res.json).toHaveBeenCalledWith({ loggedIn: true, token });
+    });
 
     it("returns ONLY loggedIn:false when the token is valid but the user no longer exists", async () => {
         // SPEC: a single, decisive negative response. (Currently the handler omits
         // a `return`, so it sends loggedIn:false AND then loggedIn:true — bug backlog.)
-        checkUserExists.mockResolvedValue(false)
-        const token = jwt.sign({ username: "ghost", user_id: "g1" }, SECRET)
-        const res = makeRes()
+        checkUserExists.mockResolvedValue(false);
+        const token = jwt.sign({ username: "ghost", user_id: "g1" }, SECRET);
+        const res = makeRes();
 
-        await handleCheckLogin(reqWith(token), res)
+        await handleCheckLogin(reqWith(token), res);
 
-        expect(res.json).toHaveBeenCalledTimes(1)
-        expect(res.json).toHaveBeenCalledWith({ loggedIn: false })
-    })
-})
+        expect(res.json).toHaveBeenCalledTimes(1);
+        expect(res.json).toHaveBeenCalledWith({ loggedIn: false });
+    });
+});

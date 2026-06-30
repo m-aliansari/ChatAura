@@ -66,28 +66,28 @@ Runs in ~seconds, no infrastructure. Covers:
 
 Notification coverage by layer:
 
-| Layer | What | Where | Status |
-|-------|------|-------|--------|
-| A | FCM token store/get/delete | `utils/fcm.js` + real PG/Redis | **done** |
-| B | Send decision + payload | `handleDirectMessage`, mock `admin.messaging().send` | **done** |
-| C | Service-worker display/click | `firebase-messaging-sw.js` | **done** |
-| D | Real Google→OS delivery | manual | `docs/notification-smoke-test.md` |
+| Layer | What                         | Where                                                | Status                            |
+| ----- | ---------------------------- | ---------------------------------------------------- | --------------------------------- |
+| A     | FCM token store/get/delete   | `utils/fcm.js` + real PG/Redis                       | **done**                          |
+| B     | Send decision + payload      | `handleDirectMessage`, mock `admin.messaging().send` | **done**                          |
+| C     | Service-worker display/click | `firebase-messaging-sw.js`                           | **done**                          |
+| D     | Real Google→OS delivery      | manual                                               | `docs/notification-smoke-test.md` |
 
 ### Known failing — bug backlog (12 tests)
 
 These spec tests fail because the code is wrong. Each names a real bug to fix in
 a later pass. **Fix the code, then the test goes green — never weaken the test.**
 
-| # | Bug | Failing test(s) |
-|---|-----|-----------------|
-| 1 | **Dot-delimiter corrupts data.** A `.` in a username or message content breaks `split('.')`, dropping/garbling fields. | `common.test.js` (parseFriendList) · `socket.int.test.js` (message round-trip) |
-| 2 | **Duplicate-friend detection never triggers.** Guard compares the bare username to `"name.id"` entries → re-adding a friend duplicates it. Fix: compare `` `${username}.${friend.user_id}` ``. | `handleSocketAddFriend.test.js` |
-| 3 | **`handleCheckLogin` double-sends.** Missing `return` on the "user deleted" branch → sends `loggedIn:false` then `loggedIn:true` (real Express: "headers already sent"). | `handleCheckLogin.test.js` |
-| 4 | **Client forms crash on a non-responding server.** `Login`/`Signup` set an Error object as state and render it (React throws on object children) → error boundary. | `Auth/Login`, `Auth/Signup` (network case) |
-| 5 | **Client forms give no feedback on a 5xx.** Non-ok response returns silently — no message shown. | `Auth/Login`, `Auth/Signup` (5xx case) |
-| 6 | **Multi-device notifications dropped.** `sendChatNotifications` only sends to `fcmTokens[0]`; other devices get nothing. | `fcm.int.test.js` (all-tokens) |
-| 7 | **`handleRegister` has no error handling.** A DB failure becomes an ungraceful unhandled 500 (unlike `handleLogin`). | `auth-resilience.int.test.js` (register DB-down) |
-| 8 | **`getFcmTokens` returns inconsistent shapes.** Cache hit → `['tok']` vs cache miss → `{ fcm_token: ['tok'] }` (raw row), and `undefined` for a user with no row. On a cold cache the caller's `fcmTokens.length > 0` silently skips notifications. Fix: `result[0]?.fcm_token ?? []`. | `fcm.int.test.js` (cache-miss, empty-array) |
+| #   | Bug                                                                                                                                                                                                                                                                                    | Failing test(s)                                                                |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| 1   | **Dot-delimiter corrupts data.** A `.` in a username or message content breaks `split('.')`, dropping/garbling fields.                                                                                                                                                                 | `common.test.js` (parseFriendList) · `socket.int.test.js` (message round-trip) |
+| 2   | **Duplicate-friend detection never triggers.** Guard compares the bare username to `"name.id"` entries → re-adding a friend duplicates it. Fix: compare `` `${username}.${friend.user_id}` ``.                                                                                         | `handleSocketAddFriend.test.js`                                                |
+| 3   | **`handleCheckLogin` double-sends.** Missing `return` on the "user deleted" branch → sends `loggedIn:false` then `loggedIn:true` (real Express: "headers already sent").                                                                                                               | `handleCheckLogin.test.js`                                                     |
+| 4   | **Client forms crash on a non-responding server.** `Login`/`Signup` set an Error object as state and render it (React throws on object children) → error boundary.                                                                                                                     | `Auth/Login`, `Auth/Signup` (network case)                                     |
+| 5   | **Client forms give no feedback on a 5xx.** Non-ok response returns silently — no message shown.                                                                                                                                                                                       | `Auth/Login`, `Auth/Signup` (5xx case)                                         |
+| 6   | **Multi-device notifications dropped.** `sendChatNotifications` only sends to `fcmTokens[0]`; other devices get nothing.                                                                                                                                                               | `fcm.int.test.js` (all-tokens)                                                 |
+| 7   | **`handleRegister` has no error handling.** A DB failure becomes an ungraceful unhandled 500 (unlike `handleLogin`).                                                                                                                                                                   | `auth-resilience.int.test.js` (register DB-down)                               |
+| 8   | **`getFcmTokens` returns inconsistent shapes.** Cache hit → `['tok']` vs cache miss → `{ fcm_token: ['tok'] }` (raw row), and `undefined` for a user with no row. On a cold cache the caller's `fcmTokens.length > 0` silently skips notifications. Fix: `result[0]?.fcm_token ?? []`. | `fcm.int.test.js` (cache-miss, empty-array)                                    |
 
 No production fixes are kept — all were reverted per the spec-first decision;
 fixing is a separate, later pass tracked by the failing tests above.
@@ -104,6 +104,7 @@ token for a deleted user cannot connect; malformed/oversized HTTP is handled
 gracefully.
 
 ### Verified SAFE (these adversarial tests pass — no weakness)
+
 - **XSS** — message content & usernames render as inert text (React escapes);
   no element injected. (`Chat/xss.adversarial`)
 - **SQL injection** — parameterized queries store payloads literally; table
@@ -117,19 +118,20 @@ gracefully.
 - **Duplicate `messageId`** deduped. (`ChatMessages`)
 
 ### New backlog from this phase (grouped by threat)
-| Threat | Bug | Where |
-|--------|-----|-------|
-| Input validation | No trimming; whitespace-only username/password/message accepted | `common/index.adversarial`, `ChatBox`, `Login`, `http-abuse.int` |
-| Input validation | Control / NUL / zero-width / RTL chars accepted in usernames | `common/index.adversarial` |
-| Input validation | Non-string inputs (number/object) silently coerced to strings | `common/index.adversarial` |
-| Injection | `:` and `.` accepted in usernames (Redis-key / delimiter injection) | `common/index.adversarial` |
-| Broken authN | Validly-signed token with **no identity claims** is accepted | `authorizeUser.adversarial` |
-| Broken authN | Token for a **deleted/non-existent user** connects (no DB check) | `abuse.int` |
-| Broken authZ | **DM to a non-friend** is allowed and persisted | `abuse.int` |
-| Broken authZ | **DM to a non-existent user** is persisted | `abuse.int` |
-| Rate limiting | Per-IP key is **shared across routes** — one route can exhaust another | `http-abuse.int` |
-| Data integrity | `username` is `VARCHAR(20)` but the schema allows **28** → 21–28 char names crash the insert (ungraceful 500) | `http-abuse.int` |
-| Robustness | App crashes when `localStorage` is disabled (private mode) | `UserContextProvider.adversarial` |
+
+| Threat           | Bug                                                                                                           | Where                                                            |
+| ---------------- | ------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| Input validation | No trimming; whitespace-only username/password/message accepted                                               | `common/index.adversarial`, `ChatBox`, `Login`, `http-abuse.int` |
+| Input validation | Control / NUL / zero-width / RTL chars accepted in usernames                                                  | `common/index.adversarial`                                       |
+| Input validation | Non-string inputs (number/object) silently coerced to strings                                                 | `common/index.adversarial`                                       |
+| Injection        | `:` and `.` accepted in usernames (Redis-key / delimiter injection)                                           | `common/index.adversarial`                                       |
+| Broken authN     | Validly-signed token with **no identity claims** is accepted                                                  | `authorizeUser.adversarial`                                      |
+| Broken authN     | Token for a **deleted/non-existent user** connects (no DB check)                                              | `abuse.int`                                                      |
+| Broken authZ     | **DM to a non-friend** is allowed and persisted                                                               | `abuse.int`                                                      |
+| Broken authZ     | **DM to a non-existent user** is persisted                                                                    | `abuse.int`                                                      |
+| Rate limiting    | Per-IP key is **shared across routes** — one route can exhaust another                                        | `http-abuse.int`                                                 |
+| Data integrity   | `username` is `VARCHAR(20)` but the schema allows **28** → 21–28 char names crash the insert (ungraceful 500) | `http-abuse.int`                                                 |
+| Robustness       | App crashes when `localStorage` is disabled (private mode)                                                    | `UserContextProvider.adversarial`                                |
 
 ## Tier 3–4 — Medium + Large (implemented; require Docker)
 
@@ -153,7 +155,7 @@ Both tiers are implemented and require **Docker Desktop + WSL2** running
 4. **Migrations.** Apply `packages/server/migrations/*.sql` (Up portion, before
    the `-- Down Migration` marker) to the fresh container so schema + queries are
    validated together. `users(id serial pk, username unique, passhash, user_id
-   unique, fcm_token varchar[] )`.
+unique, fcm_token varchar[] )`.
 5. **Test-only seams to add:** injectable disconnect timeout (hardcoded 3s in
    `index.js` / `constants/socket.js`) and a lower bcrypt cost via env in the
    auth controllers (cost 10 is ~50–100ms/call).

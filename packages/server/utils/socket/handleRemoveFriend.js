@@ -41,7 +41,7 @@ export const handleRemoveFriend = async (socket, friend, cb) => {
         await redisClient.lRem(
             getFriendsListKey(friend.username),
             0,
-            [me.username, me.user_id].join(".")
+            [me.username, me.user_id].join("."),
         );
 
         // Delete chat history on both sides

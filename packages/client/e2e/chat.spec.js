@@ -1,7 +1,10 @@
 import { expect, test } from "./fixtures/app.js";
 import { seedFriendship } from "./fixtures/seed.js";
 
-test("typing indicator shows while UserA types and clears when they stop", async ({ request, openAppAs }) => {
+test("typing indicator shows while UserA types and clears when they stop", async ({
+    request,
+    openAppAs,
+}) => {
     const { a, b } = await seedFriendship(request);
 
     const pageA = await openAppAs(a);
@@ -24,8 +27,8 @@ test("typing indicator shows while UserA types and clears when they stop", async
     });
 
     await test.step("clears after the 2s idle window (advanced instantly)", async () => {
-        await pageA.clock.runFor(2000);          // fire the debounce -> STOP_TYPING
-        await expect(indicator).toBeHidden();    // resolves immediately on success
+        await pageA.clock.runFor(2000); // fire the debounce -> STOP_TYPING
+        await expect(indicator).toBeHidden(); // resolves immediately on success
     });
 });
 
@@ -47,9 +50,12 @@ test("typing indicator clears if UserA sends a message", async ({ request, openA
 
     pageA.getByRole("button", { name: "Send" }).click();
     await expect(indicator).toBeHidden();
-})
+});
 
-test("UserA can send a message to UserB and it appears in UserB's chat window", async ({ request, openAppAs }) => {
+test("UserA can send a message to UserB and it appears in UserB's chat window", async ({
+    request,
+    openAppAs,
+}) => {
     const { a, b } = await seedFriendship(request);
 
     const pageA = await openAppAs(a);
