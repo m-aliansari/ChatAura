@@ -38,7 +38,25 @@ yarn workspace @realtime-chatapp/server migrate:redo     # down then up the last
 yarn workspace @realtime-chatapp/server migrate:create <name>
 ```
 
-There is **no test suite** in this repo.
+### Testing
+
+Three tiers, all run from the repo root:
+
+```bash
+yarn test              # unit (Vitest) across common, server, client — no Docker
+yarn test:integration  # server integration: real Postgres + Redis via Testcontainers (needs Docker)
+yarn test:e2e          # Playwright E2E: builds client, boots disposable PG+Redis+server, 3 browsers (needs Docker)
+yarn test:all          # all of the above, in sequence
+yarn coverage:server   # merged unit + integration coverage report -> packages/server/coverage/merged
+```
+
+- Unit tests live next to their source as `*.test.{js,jsx}`; server integration tests are `test/integration/**/*.int.test.js` (separate `vitest.integration.config.js`, `fileParallelism: false` — they share one container set).
+- Coverage is **measured, not enforced** (no failing threshold). E2E is a behavioral gate and does not contribute to coverage numbers.
+
+### Formatting & hooks
+
+- **Prettier** owns formatting (`.prettierrc.json`: 4-space, double quotes, semicolons); **ESLint** owns code quality, with `eslint-config-prettier` last in each config so they don't conflict. `yarn format` / `yarn lint`.
+- **Husky pre-commit** runs `lint-staged`, which formats + `eslint --fix`es only staged files. lint-staged uses **per-package** `.lintstagedrc.json` files so each package's flat ESLint config resolves from the right cwd — do not collapse these into one root glob.
 
 ## Architecture
 
@@ -96,3 +114,10 @@ Client (Vite, `VITE_` prefix required): `VITE_API_BASE_URL`, `VITE_FIREBASE_VAPI
 - Server is layered: `routers/` → `controllers/<feature>Controller/` → `utils/` and `queries/`. SQL strings live in `queries/`, route handlers in per-feature controller folders.
 - Express routes are mounted under base paths from `API_ROUTES` (e.g. `app.use(API_ROUTES.AUTH.BASE, authRouter)`), and routers use the `SPECIFIC` sub-paths.
 - Rate limiting is per-IP via Redis (`middlewares/express/rateLimiter.js`), applied as `rateLimiter(seconds, max)` on auth routes.
+
+## CI & Deployment
+
+CI (`.github/workflows/ci.yml`) runs lint + all three test tiers on every PR and push to `master`. The two production deploys are **both gated on that CI passing**, but by different mechanisms:
+
+- **Client → Netlify** (static). The client build **bundles `@realtime-chatapp/common` in at build time**, so Netlify has no runtime dependency on the workspace. `packages/client/netlify.toml` carries an `ignore` command that **builds only Deploy Previews** (PRs: `PULL_REQUEST=true`) and cancels production/branch builds; the live site is published by a GitHub Actions **build hook** (`NETLIFY_BUILD_HOOK` secret) that fires only after CI is green. Build-hook builds bypass the ignore command, so the gated production deploy still works. Do not enable Netlify's "Stopped builds" toggle — it also disables build hooks.
+- **Server → Render** (Node, **not bundled**). The server resolves `@realtime-chatapp/common` from `node_modules` **at runtime**, and that package is not published to npm — it exists only as a workspace. So Render **must install from the repo root**: Root Directory is blank, Build Command is `corepack enable && yarn` (Yarn 4 workspace install that symlinks `common` and hoists `yup`), Start Command is `yarn start`. If Root Directory were set to `packages/server`, the isolated install would fail to find `common@1.0.0`. Render's **Auto-Deploy = "After CI Checks Pass"** provides the gate natively (no deploy hook needed). DB migrations are **not** auto-applied on deploy — add `yarn workspace @realtime-chatapp/server migrate:up` to Render's Pre-Deploy command if/when migrations must run before boot.

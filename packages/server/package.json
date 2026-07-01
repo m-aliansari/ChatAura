@@ -25,6 +25,8 @@
         "test": "vitest run",
         "test:watch": "vitest",
         "test:integration": "vitest run --config vitest.integration.config.js",
+        "coverage": "vitest run --coverage && vitest run --config vitest.integration.config.js --coverage && node scripts/merge-coverage.mjs",
+        "coverage:merge": "node scripts/merge-coverage.mjs",
         "migrate:up": "node-pg-migrate up",
         "migrate:down": "node-pg-migrate down",
         "migrate:redo": "node-pg-migrate redo",
@@ -36,6 +38,9 @@
         "@testcontainers/redis": "^12.0.3",
         "eslint": "^9.30.1",
         "globals": "^16.3.0",
+        "istanbul-lib-coverage": "^3.2.2",
+        "istanbul-lib-report": "^3.0.1",
+        "istanbul-reports": "^3.2.0",
         "node-pg-migrate": "^8.0.3",
         "socket.io-client": "^4.8.3",
         "vitest": "^4.1.9"

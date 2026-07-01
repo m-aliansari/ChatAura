@@ -24,7 +24,9 @@ export default defineConfig({
     workers: 1,
     // Retry to absorb residual timing flakiness in realtime/auth-bootstrap specs.
     retries: process.env.CI ? 2 : 1,
-    reporter: "list",
+    // `list` for live console output; on CI also emit a self-contained HTML
+    // report (with embedded traces) that the workflow uploads as an artifact.
+    reporter: process.env.CI ? [["list"], ["html", { open: "never" }]] : "list",
     use: {
         baseURL: CLIENT_ORIGIN,
         trace: "on-first-retry",
