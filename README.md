@@ -135,7 +135,19 @@ Per-package:
 | `yarn workspace @realtime-chatapp/server migrate:redo`          | Roll back then re-apply the last migration |
 | `yarn workspace @realtime-chatapp/server migrate:create <name>` | Scaffold a new migration                   |
 
-> There is no automated test suite in this repo.
+### Testing
+
+Three tiers, run from the repo root (integration and E2E need Docker):
+
+| Command                 | Description                                                             |
+| ----------------------- | ----------------------------------------------------------------------- |
+| `yarn test`             | Unit tests (Vitest) across common, server, and client                   |
+| `yarn test:integration` | Server integration tests against real Postgres + Redis (Testcontainers) |
+| `yarn test:e2e`         | Playwright end-to-end tests across three browsers                       |
+| `yarn test:all`         | All of the above, in sequence                                           |
+| `yarn coverage:server`  | Merged unit + integration coverage report for the server                |
+
+CI (GitHub Actions) runs lint plus all three tiers on every pull request and push to `master`; both production deploys (Netlify client, Render server) are gated on a green pipeline.
 
 ## License
 
