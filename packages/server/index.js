@@ -16,9 +16,19 @@ import { handleRemoveFriend } from "./utils/socket/handleRemoveFriend.js";
 import { handleDisconnect } from "./utils/socket/handleDisconnect.js";
 import { initializeUser } from "./utils/socket/initializeUser.js";
 import { registerDisconnect } from "./utils/socket/registerDisconnect.js";
+import { reconcilePresence } from "./utils/socket/reconcilePresence.js";
 import { disconnectTimers } from "./constants/socket.js";
 
-redisClient.connect().catch(console.error);
+// Connect Redis and clear any stale presence flags left by a previous process
+// (crash/restart/deploy) before we accept sockets — otherwise offline users
+// linger as "online" for their friends. Kept resilient: a Redis hiccup at boot
+// must not stop the HTTP server from starting (the client auto-reconnects).
+try {
+    await redisClient.connect();
+    await reconcilePresence();
+} catch (error) {
+    console.error("Redis startup/presence reconcile failed:", error);
+}
 
 const app = express();
 const server = http.createServer(app);
