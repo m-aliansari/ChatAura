@@ -43,15 +43,18 @@ export const FriendRow = ({ friend }) => {
 
     return (
         <HStack w="100%" justify="space-between">
-            <HStack as={Tabs.Trigger} value={friend.user_id} flex="1">
+            <HStack as={Tabs.Trigger} value={friend.user_id} flex="1" minW="0">
                 <Circle
                     data-status={friend.connected ? "online" : "offline"}
                     aria-label={`${friend.username} is ${friend.connected ? "online" : "offline"}`}
                     bg={friend.connected ? "green.500" : "red.500"}
                     w="20px"
                     h="20px"
+                    flexShrink="0"
                 />
-                <Text>{friend.username}</Text>
+                <Text truncate minW="0">
+                    {friend.username}
+                </Text>
             </HStack>
             <Dialog.Root open={open} onOpenChange={(e) => setOpen(e.open)} placement="center">
                 <Dialog.Trigger asChild>

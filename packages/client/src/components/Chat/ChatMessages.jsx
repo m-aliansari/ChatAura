@@ -1,4 +1,14 @@
-import { Box, Heading, HStack, Tabs, Text, useTabsContext, VStack } from "@chakra-ui/react";
+import {
+    Box,
+    Heading,
+    HStack,
+    IconButton,
+    Tabs,
+    Text,
+    useTabsContext,
+    VStack,
+} from "@chakra-ui/react";
+import { MdArrowBack } from "react-icons/md";
 import { FriendsContext } from "../../contexts/Friends/FriendsContext.js";
 import { useContext, useEffect, useRef, useState } from "react";
 import { MessagesContext } from "../../contexts/Messages/MessagesContext.js";
@@ -13,7 +23,7 @@ const dotPulse = keyframes(`
   100% { opacity: 0.2; transform: scale(1); }
 `);
 
-export const ChatMessages = () => {
+export const ChatMessages = ({ onBack }) => {
     const { socket } = useContext(SocketContext);
     const { friendList } = useContext(FriendsContext);
     const { messages, setMessages } = useContext(MessagesContext);
@@ -67,15 +77,28 @@ export const ChatMessages = () => {
                     key={`messages:${friend.username}`}
                     value={friend.user_id}
                     as={VStack}
-                    h="100vh" // or 100% if the parent has constrained height
+                    h="100dvh" // dynamic vh so the input isn't clipped by mobile browser chrome
                     w="100%"
                     p="0"
                     spacing="0"
                 >
-                    {/* Fixed Heading */}
-                    <Heading fontSize="2xl" w="100%" p="1rem" textAlign="center">
-                        {friend.username}
-                    </Heading>
+                    {/* Fixed Heading (with a back button on mobile) */}
+                    <HStack w="100%" p="1rem" justify="center" position="relative">
+                        {onBack && (
+                            <IconButton
+                                aria-label="Back to friends"
+                                variant="ghost"
+                                onClick={onBack}
+                                position="absolute"
+                                left="0.5rem"
+                            >
+                                <MdArrowBack />
+                            </IconButton>
+                        )}
+                        <Heading fontSize="2xl" textAlign="center">
+                            {friend.username}
+                        </Heading>
+                    </HStack>
 
                     {/* Scrollable Messages */}
                     <Box
@@ -124,6 +147,7 @@ export const ChatMessages = () => {
                                     p="0.5rem 1rem"
                                     maxW="60%"
                                     borderRadius="10px"
+                                    wordBreak="break-word"
                                 >
                                     {newMessage.content}
                                 </Text>
@@ -148,6 +172,7 @@ export const ChatMessages = () => {
                                         p="0.5rem 1rem"
                                         maxW="60%"
                                         borderRadius="10px"
+                                        wordBreak="break-word"
                                     >
                                         {message.content}
                                     </Text>

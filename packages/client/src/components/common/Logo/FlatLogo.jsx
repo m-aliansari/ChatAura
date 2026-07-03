@@ -6,15 +6,13 @@ export const FlatLogo = ({ width = "auto", height = "auto" }) => {
         <img
             src="/ChatAura_logo_flat_dark.png"
             alt="Chat Aura Logo"
-            width={width}
-            height={height}
+            style={{ width, height, maxWidth: "100%" }}
         />
     ) : (
         <img
             src="/ChatAura_logo_flat_light.png"
             alt="Chat Aura Logo"
-            width={width}
-            height={height}
+            style={{ width, height, maxWidth: "100%" }}
         />
     );
 };

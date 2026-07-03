@@ -17,8 +17,8 @@ export const SideBar = () => {
         <Dialog.Root placement="center" motionPreset="slide-in-bottom">
             <VStack py="1.4rem">
                 <FlatLogo width="150px" />
-                <HStack justify="center" gap="15px" w="100%">
-                    <Heading size="md">Add Friend</Heading>
+                <HStack justify="center" gap="15px" w="100%" flexWrap="wrap" px="0.5rem">
+                    <Heading size={{ base: "sm", md: "md" }}>Add Friend</Heading>
                     <Dialog.Trigger asChild>
                         <Button variant="surface" aria-label="Add Friend">
                             <MdAdd size={10} />
@@ -33,7 +33,7 @@ export const SideBar = () => {
                     <VStack
                         as={Tabs.List}
                         w="100%"
-                        p="2rem"
+                        p={{ base: "1rem", md: "2rem" }}
                         maxH="82vh"
                         overflowY="auto"
                         backgroundImage={{
