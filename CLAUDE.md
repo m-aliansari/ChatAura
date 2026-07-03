@@ -12,6 +12,29 @@ Realtime chat app where users register, add each other as friends, and exchange 
 
 The `common` package is imported by **both** client and server and is the single source of truth for socket event names, API route paths, and form validation. Change an event/route name there, not in a consumer.
 
+## Architectural Direction & Decisions (roadmap)
+
+> **This section is direction, mostly not-yet-implemented.** It records where the app is going and why. Do NOT read it as current behavior — today messages and friendships still live **only in Redis**. Full detail, staged plan, and deployment targets live in **[`docs/ROADMAP.md`](docs/ROADMAP.md)**; keep the two in sync.
+
+The overarching goal: make the app professional, scalable, and **microservices / k8s-ready**, by treating Redis correctly and putting durable data in Postgres. Keep these in mind for every change:
+
+**Key decisions:**
+
+- **Redis is not a database.** Narrow it to cache + pub/sub + ephemeral state. Presence (`connected`), FCM cache-aside, and rate-limit TTL keys are already correct — **do not touch them**.
+- **Postgres = source of truth** for durable/relational data. **Messages and friendships** are currently misplaced in Redis and will move to Postgres.
+- **Adopt TypeScript** — `server` + `common` first, client (JSX) deferred.
+- **ORM = Drizzle** (chosen over Prisma/Kysely: lightweight, no engine binary, no lock-in, SQL-shaped, k8s-friendly). Standardize new data-access code on it.
+- **Sequencing:** TypeScript first, _then_ Drizzle + the Postgres data migration. First data slice = **friendships** (clean cutover, no backfill), then messages, then Docker.
+- **Microservices posture = Option A: a microservices-_ready_ monolith.** Stay one deployable now; do not physically split services yet (YAGNI).
+- **Do not weight the shared `common` package** as an argument in decisions — as a build-time workspace symlink it won't survive a microservices split (it becomes versioned/published contracts).
+
+**Guiding principles for new code:**
+
+1. **Postgres = source of truth; Redis = speed + realtime, never the only copy.** Per Redis key ask: _"if flushed now — cache miss or data loss?"_ Data loss ⇒ it belongs in Postgres.
+2. **Database-per-context boundaries.** Keep each domain (auth/users, friendships, messaging) cohesive and separable; cross-context references go through `user_id` (a stable value), **not** hard FKs that straddle future service lines.
+3. **Stateless services.** No new per-instance in-memory state — the existing in-memory disconnect timers + single-instance `connected` boolean are the scaling blockers; new realtime coordination goes through shared Redis + (eventually) the Socket.io Redis pub/sub adapter.
+4. **Contract-based, loosely coupled.** Prefer decoupling side effects (e.g. emit an event on new message) over direct cross-domain calls, so pieces can split out cleanly later.
+
 ## Commands
 
 Run from the repo root (workspace-aware scripts):
