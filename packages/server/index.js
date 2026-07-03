@@ -15,7 +15,8 @@ import { handleSocketAddFriend } from "./utils/socket/handleSocketAddFriend.js";
 import { handleRemoveFriend } from "./utils/socket/handleRemoveFriend.js";
 import { handleDisconnect } from "./utils/socket/handleDisconnect.js";
 import { initializeUser } from "./utils/socket/initializeUser.js";
-import { disconnectTimers, DISCONNECT_GRACE_MS } from "./constants/socket.js";
+import { registerDisconnect } from "./utils/socket/registerDisconnect.js";
+import { disconnectTimers } from "./constants/socket.js";
 
 redisClient.connect().catch(console.error);
 
@@ -64,14 +65,7 @@ socketio.on("connection", async (socket) => {
     socket.on(SOCKET_EVENTS.DIRECT_MESSAGE, (message, cb) => {
         handleDirectMessage(socket, message, cb);
     });
-    socket.on(SOCKET_EVENTS.DISCONNECT, () => {
-        const timer = setTimeout(() => {
-            handleDisconnect(socket);
-            disconnectTimers.delete(socket.user.username);
-        }, DISCONNECT_GRACE_MS);
-
-        disconnectTimers.set(socket.user.username, timer);
-    });
+    registerDisconnect(socketio, socket);
     socket.on(SOCKET_EVENTS.FRIEND_REQUEST_RECEIVED, () => {
         handleDisconnect(socket);
     });

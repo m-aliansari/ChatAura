@@ -159,6 +159,38 @@ describe("handleDirectMessage delivery", () => {
         a.close();
         b2.close();
     });
+
+    it("delivers messages sent while the recipient was offline, on their next connect", async () => {
+        const alice = await insertUser();
+        const bob = await insertUser();
+        await befriend(alice, bob);
+
+        // Bob never connects — he is fully offline when Alice messages him.
+        const a = connect(tokenFor(alice));
+        await once(a, SOCKET_EVENTS.FRIENDS_LIST);
+
+        const ack = await a.emitWithAck(SOCKET_EVENTS.DIRECT_MESSAGE, {
+            to: bob.user_id,
+            content: "you were offline when I sent this",
+        });
+        expect(ack.done).toBe(true);
+
+        // Bob logs in later and receives the backlog via MESSAGES on connect.
+        const b = connect(tokenFor(bob));
+        const messages = await once(b, SOCKET_EVENTS.MESSAGES);
+        expect(messages).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    to: bob.user_id,
+                    from: alice.user_id,
+                    content: "you were offline when I sent this",
+                }),
+            ]),
+        );
+
+        a.close();
+        b.close();
+    });
 });
 
 describe("connection status propagation", () => {

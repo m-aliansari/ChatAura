@@ -73,3 +73,23 @@ test("UserA can send a message to UserB and it appears in UserB's chat window", 
     const messageInB = pageB.getByText(message);
     await expect(messageInB).toBeVisible();
 });
+
+test("a user receives messages sent while they were offline, on next login", async ({
+    request,
+    openAppAs,
+}) => {
+    const { a, b } = await seedFriendship(request);
+
+    // Only UserA is online; UserB never opens the app, so he is offline.
+    const pageA = await openAppAs(a);
+
+    const message = "sent while UserB was offline";
+    await pageA.getByRole("tab", { name: b.username }).click();
+    await pageA.getByPlaceholder("Type message here...").fill(message);
+    await pageA.getByRole("button", { name: "Send" }).click();
+
+    // UserB logs in later and should see the message waiting in the conversation.
+    const pageB = await openAppAs(b);
+    await pageB.getByRole("tab", { name: a.username }).click();
+    await expect(pageB.getByText(message)).toBeVisible();
+});
