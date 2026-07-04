@@ -51,7 +51,9 @@ export default defineConfig({
     webServer: [
         {
             // Boots disposable PG + Redis + the real server (firebase stubbed via DISABLE_FCM).
-            command: "node test/e2e/server.mjs",
+            // `--import tsx` loads the tsx loader (resolved from the server
+            // workspace) so the harness can import the .ts server modules.
+            command: "node --import tsx test/e2e/server.mjs",
             cwd: "../server",
             port: SERVER_PORT,
             timeout: 180_000,

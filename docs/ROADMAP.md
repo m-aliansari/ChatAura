@@ -58,14 +58,19 @@ Postgres today holds only the `users` table + an `fcm_token[]` column. The goal 
 
 ## Staged Roadmap
 
-### Stage 1 — TypeScript migration (server + common) ← next executable stage
+### Stage 1 — TypeScript migration (server + common) ✅ DONE
 
-Convert `packages/server` and `packages/common` to TS; leave `packages/client` as JS (Vite consumes TS `common` fine). Tooling: `tsconfig` per package, build / `nodemon` / `vitest` / `eslint` / `lint-staged` / CI updates; decide `tsc` build vs runtime type-strip (`tsx` / Node 22 `--experimental-strip-types`). Tricky typings to handle deliberately:
+`packages/server` and `packages/common` are TypeScript; `packages/client` stays JS (Vite/esbuild consumes the TS `common` fine). **Resolved the open build question in favour of `tsx` runtime** (over `tsc` build-to-dist or Node `--experimental-strip-types`): dev = `tsx watch`, prod = `tsx index.ts`, and a `tsc --noEmit` CI gate enforces types. No `dist/`, no build-ordering, and **Render/Netlify deploy commands are unchanged** — compiled artifacts are deferred to Stage 4 (Docker). Files were renamed `.js`→`.ts` keeping the existing explicit `.js` import specifiers (both `tsx` and `tsc` with `moduleResolution: NodeNext` resolve them to the `.ts` sources).
 
-- pg-promise `pool.query` resolves to a **row array** (not `{ rows }`).
-- JWT helpers return Go-style `[err, result]` tuples.
-- Socket.io event payload types (drive off `SOCKET_EVENTS` in `common`).
+Tooling landed: root `tsconfig.base.json` + per-package `tsconfig.json` (`strict: true`, `NodeNext`, `verbatimModuleSyntax`, `isolatedModules`), `tsx` (server runtime dep), `typescript-eslint` in both eslint configs (`common` gained its first lint config), `.test.ts` vitest globs, `.lintstagedrc` `*.{js,ts}`, e2e boot via `node --import tsx`, and a CI **Typecheck** step. Tricky typings handled deliberately:
+
+- pg-promise `pool.query` resolves to a **row array** (not `{ rows }`) — call-site generics.
+- JWT helpers return Go-style `[err, result]` tuples — modelled as discriminated tuple unions in `utils/jwt.ts`; `JWT_SECRET` now fails fast at boot if unset.
+- `socket.user` is typed via a `declare module "socket.io"` augmentation (`types/socket.ts`, `AuthedUser`).
+- The dead `SOCKET_EVENTS.FRIEND_REQUEST_RECEIVED` listener (an undefined event name → no-op) was removed; strict typing surfaced it.
 - (Client's misspelled `SocketContextProvide` is out of scope now.)
+
+**Scoping note:** the strict `tsc` gate covers **production source only**. Test files (`*.test.ts` + `test/**`) stay `.ts` and run under vitest/esbuild (the behavioral gate) but are excluded from the type gate to keep this stage focused; tightening their typings is a tracked follow-up.
 
 ### Stage 2 — Drizzle + friendships → Postgres (clean cutover)
 

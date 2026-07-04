@@ -1,20 +1,29 @@
 {
     "name": "@realtime-chatapp/common",
     "version": "1.0.0",
-    "main": "index.js",
+    "main": "index.ts",
+    "types": "index.ts",
     "license": "MIT",
     "type": "module",
     "exports": {
-        ".": "./index.js"
+        ".": "./index.ts"
     },
     "scripts": {
         "test": "vitest run",
-        "test:watch": "vitest"
+        "test:watch": "vitest",
+        "lint": "eslint .",
+        "typecheck": "tsc --noEmit"
     },
     "dependencies": {
         "yup": "^1.6.1"
     },
     "devDependencies": {
+        "@eslint/js": "^9.30.1",
+        "eslint": "^9.30.1",
+        "eslint-config-prettier": "^10.1.8",
+        "globals": "^16.3.0",
+        "typescript": "^6.0.3",
+        "typescript-eslint": "^8.62.1",
         "vitest": "^4.1.9"
     }
 }

@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
     lint:
-        name: Lint & format
+        name: Lint, format & typecheck
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v4
@@ -30,6 +30,10 @@ jobs:
               run: yarn format:check
             - name: Lint
               run: yarn lint
+            # Strict tsc --noEmit gate for server + common (tsx runs the .ts at
+            # runtime and does not type-check, so this is where types are enforced).
+            - name: Typecheck
+              run: yarn typecheck
 
     unit:
         name: Unit tests

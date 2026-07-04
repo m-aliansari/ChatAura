@@ -8,7 +8,8 @@
         "dev:client": "yarn workspace @realtime-chatapp/client dev",
         "build:client": "yarn workspace @realtime-chatapp/client build",
         "start": "yarn workspace @realtime-chatapp/server start",
-        "lint": "yarn workspace @realtime-chatapp/client lint ; yarn workspace @realtime-chatapp/server lint",
+        "lint": "yarn workspace @realtime-chatapp/common lint ; yarn workspace @realtime-chatapp/client lint ; yarn workspace @realtime-chatapp/server lint",
+        "typecheck": "yarn workspace @realtime-chatapp/common typecheck ; yarn workspace @realtime-chatapp/server typecheck",
         "test": "yarn workspace @realtime-chatapp/common test ; yarn workspace @realtime-chatapp/server test ; yarn workspace @realtime-chatapp/client test",
         "test:integration": "yarn workspace @realtime-chatapp/server test:integration",
         "test:e2e": "yarn workspace @realtime-chatapp/client test:e2e",
@@ -22,7 +23,7 @@
         "packages/*"
     ],
     "lint-staged": {
-        "*.{js,jsx,json,md,yml,yaml}": [
+        "*.{js,jsx,ts,tsx,json,md,yml,yaml}": [
             "prettier --write"
         ]
     },
