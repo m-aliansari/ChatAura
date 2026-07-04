@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { Socket } from "socket.io";
 import { REDIS_FCM_TOKENS_PREFIX } from "../../constants/fcm.js";
 import { insertUser, befriend } from "./helpers.js";
 
@@ -18,7 +19,7 @@ beforeEach(() => {
     sendMock.mockClear();
 });
 
-const cacheKey = (userId) => `${REDIS_FCM_TOKENS_PREFIX}${userId}`;
+const cacheKey = (userId: string) => `${REDIS_FCM_TOKENS_PREFIX}${userId}`;
 
 describe("FCM token lifecycle (Layer A) — real Postgres + Redis", () => {
     it("stores a token in Postgres and caches it in Redis", async () => {
@@ -28,7 +29,7 @@ describe("FCM token lifecycle (Layer A) — real Postgres + Redis", () => {
 
         // Redis cache populated...
         const cached = await redisClient.get(cacheKey(user_id));
-        expect(JSON.parse(cached)).toEqual(["tok-1"]);
+        expect(JSON.parse(cached!)).toEqual(["tok-1"]);
         // ...and getFcmTokens reflects it.
         expect(await getFcmTokens(user_id)).toEqual(["tok-1"]);
     });
@@ -70,18 +71,18 @@ describe("FCM token lifecycle (Layer A) — real Postgres + Redis", () => {
         await deleteFcmToken(user_id, "tok-1");
 
         expect(await getFcmTokens(user_id)).toEqual(["tok-2"]);
-        expect(JSON.parse(await redisClient.get(cacheKey(user_id)))).toEqual(["tok-2"]);
+        expect(JSON.parse((await redisClient.get(cacheKey(user_id)))!)).toEqual(["tok-2"]);
     });
 });
 
 describe("handleDirectMessage notification trigger (Layer B)", () => {
-    function fakeSocket(fromUser) {
+    function fakeSocket(fromUser: { user_id: string; username: string }) {
         const emit = vi.fn();
         return {
             socket: {
                 user: { user_id: fromUser.user_id, username: fromUser.username },
                 to: vi.fn(() => ({ emit })),
-            },
+            } as unknown as Socket,
             emit,
         };
     }

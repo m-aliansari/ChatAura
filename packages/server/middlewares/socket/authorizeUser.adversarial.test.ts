@@ -1,11 +1,12 @@
 import { describe, it, expect, vi } from "vitest";
 import jwt from "jsonwebtoken";
+import type { Socket } from "socket.io";
 import { authorizeUser } from "./authorizeUser.js";
 
 const SECRET = "test-secret-key"; // from vitest.config.js env
-const socketWith = (token) => ({ handshake: { auth: { token } } });
+const socketWith = (token: unknown) => ({ handshake: { auth: { token } } }) as unknown as Socket;
 
-async function authorize(token) {
+async function authorize(token: unknown) {
     const socket = socketWith(token);
     const next = vi.fn();
     await authorizeUser(socket, next);

@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import jwt from "jsonwebtoken";
+import type { Request, Response } from "express";
 
 const checkUserExists = vi.fn();
 vi.mock("../../utils/users.js", () => ({
-    checkUserExists: (...a) => checkUserExists(...a),
+    checkUserExists: (...a: unknown[]) => checkUserExists(...a),
 }));
 
 const { handleCheckLogin } = await import("./handleCheckLogin.js");
@@ -11,11 +12,12 @@ const { handleCheckLogin } = await import("./handleCheckLogin.js");
 const SECRET = "test-secret-key"; // from vitest.config.js env
 
 function makeRes() {
-    return { json: vi.fn() };
+    return { json: vi.fn() } as unknown as Response;
 }
-const reqWith = (token) => ({
-    headers: token ? { authorization: `Bearer ${token}` } : {},
-});
+const reqWith = (token: string | null) =>
+    ({
+        headers: token ? { authorization: `Bearer ${token}` } : {},
+    }) as unknown as Request;
 
 beforeEach(() => checkUserExists.mockReset());
 

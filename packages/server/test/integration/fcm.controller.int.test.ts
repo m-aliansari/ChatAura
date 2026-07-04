@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
 import express, { json } from "express";
 import jwt from "jsonwebtoken";
 import { API_ROUTES } from "@realtime-chatapp/common";
+import type { Server } from "node:http";
+import type { AddressInfo } from "node:net";
 import { insertUser } from "./helpers.js";
 
 // fcmRouter -> controllers -> fcm.js -> firebase.js; stub firebase.
@@ -9,8 +11,8 @@ vi.mock("../../firebase.js", () => ({
     default: { messaging: () => ({ send: vi.fn() }) },
 }));
 
-let baseUrl;
-let server;
+let baseUrl: string;
+let server: Server;
 
 beforeAll(async () => {
     const fcmRouter = (await import("../../routers/fcmRouter.js")).default;
@@ -18,18 +20,18 @@ beforeAll(async () => {
     app.set("trust proxy", 1);
     app.use(json());
     app.use(API_ROUTES.FCM.BASE, fcmRouter);
-    await new Promise((resolve) => {
-        server = app.listen(0, resolve);
+    await new Promise<void>((resolve) => {
+        server = app.listen(0, () => resolve());
     });
-    baseUrl = `http://127.0.0.1:${server.address().port}`;
+    baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 });
 
 afterAll(() => server?.close());
 
-const tokenFor = (user_id, username = "u") =>
+const tokenFor = (user_id: string, username = "u") =>
     jwt.sign({ user_id, username, id: 1 }, "test-secret-key", { expiresIn: "3h" });
 
-const post = (path, body, token) =>
+const post = (path: string, body: unknown, token?: string) =>
     fetch(`${baseUrl}${path}`, {
         method: "POST",
         headers: {

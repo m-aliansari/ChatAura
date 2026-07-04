@@ -1,10 +1,12 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import express, { json } from "express";
 import { API_ROUTES } from "@realtime-chatapp/common";
+import type { Server } from "node:http";
+import type { AddressInfo } from "node:net";
 import { insertUser } from "./helpers.js";
 
-let baseUrl;
-let server;
+let baseUrl: string;
+let server: Server;
 
 beforeAll(async () => {
     const authRouter = (await import("../../routers/authRouter.js")).default;
@@ -12,16 +14,18 @@ beforeAll(async () => {
     app.set("trust proxy", 1);
     app.use(json());
     app.use(API_ROUTES.AUTH.BASE, authRouter);
-    await new Promise((resolve) => {
-        server = app.listen(0, resolve);
+    await new Promise<void>((resolve) => {
+        server = app.listen(0, () => resolve());
     });
-    baseUrl = `http://127.0.0.1:${server.address().port}`;
+    baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 });
 
 afterAll(() => server?.close());
 
-const raw = (path, { body, headers } = {}) =>
-    fetch(`${baseUrl}${path}`, { method: "POST", headers, body });
+const raw = (
+    path: string,
+    { body, headers }: { body?: string; headers?: Record<string, string> } = {},
+) => fetch(`${baseUrl}${path}`, { method: "POST", headers, body });
 
 describe("HTTP protocol abuse", () => {
     it("handles a malformed JSON body gracefully (4xx, not a crash)", async () => {
@@ -54,7 +58,7 @@ describe("HTTP protocol abuse", () => {
             const res = await fetch(`${baseUrl}${API_ROUTES.AUTH.LOGIN}`, {
                 headers: { authorization: authValue },
             });
-            const data = await res.json();
+            const data = (await res.json()) as { loggedIn?: boolean };
             expect(data.loggedIn).toBe(false);
         }
     });
@@ -69,7 +73,7 @@ describe("rate-limit isolation between routes", () => {
     it("does not let one route's traffic exhaust another route's budget", async () => {
         // SPEC: per-route budgets. Today the key is per-IP shared across all
         // routes, so prior /login calls can 429 the first /register call.
-        const post = (path) =>
+        const post = (path: string) =>
             raw(path, {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ username: "limituser", password: "secret1" }),

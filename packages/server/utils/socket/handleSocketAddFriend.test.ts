@@ -1,13 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { Socket } from "socket.io";
 
 const hGetAll = vi.fn();
 const lRange = vi.fn();
 const lPush = vi.fn();
 vi.mock("../redis.js", () => ({
     redisClient: {
-        hGetAll: (...a) => hGetAll(...a),
-        lRange: (...a) => lRange(...a),
-        lPush: (...a) => lPush(...a),
+        hGetAll: (...a: unknown[]) => hGetAll(...a),
+        lRange: (...a: unknown[]) => lRange(...a),
+        lPush: (...a: unknown[]) => lPush(...a),
     },
 }));
 
@@ -19,7 +20,7 @@ function makeSocket() {
         socket: {
             user: { username: "alice", user_id: "alice-id" },
             to: vi.fn(() => ({ emit })),
-        },
+        } as unknown as Socket,
         emit,
     };
 }

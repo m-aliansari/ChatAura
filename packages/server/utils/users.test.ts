@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const query = vi.fn();
-vi.mock("./postgres.js", () => ({ pool: { query: (...a) => query(...a) } }));
+vi.mock("./postgres.js", () => ({ pool: { query: (...a: unknown[]) => query(...a) } }));
 
 const { checkUserExists } = await import("./users.js");
 

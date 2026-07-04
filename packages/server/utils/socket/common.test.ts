@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // parseFriendList depends on the redis singleton; mock only that boundary.
 const hGet = vi.fn();
 vi.mock("../redis.js", () => ({
-    redisClient: { hGet: (...args) => hGet(...args) },
+    redisClient: { hGet: (...args: unknown[]) => hGet(...args) },
 }));
 
 const { parseFriendList, getHashMapKey, getFriendsListKey, getMessagesKey } =

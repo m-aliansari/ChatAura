@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
-import { createServer } from "node:http";
+import { createServer, type Server as HttpServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import { Server } from "socket.io";
-import { io as ioc } from "socket.io-client";
+import { io as ioc, type Socket as ClientSocket } from "socket.io-client";
 import jwt from "jsonwebtoken";
 import { v4 as uuid } from "uuid";
 import { SOCKET_EVENTS } from "@realtime-chatapp/common";
@@ -18,9 +19,9 @@ const { handleDirectMessage } = await import("../../utils/socket/directMessage.j
 const { redisClient } = await import("../../utils/redis.js");
 const { getMessagesKey } = await import("../../utils/socket/common.js");
 
-let httpServer;
-let io;
-let port;
+let httpServer: HttpServer;
+let io: Server;
+let port: number;
 
 beforeAll(async () => {
     httpServer = createServer();
@@ -30,8 +31,8 @@ beforeAll(async () => {
         await initializeUser(socket);
         socket.on(SOCKET_EVENTS.DIRECT_MESSAGE, (msg, cb) => handleDirectMessage(socket, msg, cb));
     });
-    await new Promise((resolve) => httpServer.listen(0, resolve));
-    port = httpServer.address().port;
+    await new Promise<void>((resolve) => httpServer.listen(0, () => resolve()));
+    port = (httpServer.address() as AddressInfo).port;
 });
 
 afterAll(() => {
@@ -39,12 +40,12 @@ afterAll(() => {
     httpServer?.close();
 });
 
-const tokenFor = (user) =>
+const tokenFor = (user: { username: string; user_id: string; id: number }) =>
     jwt.sign({ username: user.username, user_id: user.user_id, id: user.id }, "test-secret-key", {
         expiresIn: "3h",
     });
 
-const connect = (token) =>
+const connect = (token: string) =>
     ioc(`http://127.0.0.1:${port}`, {
         auth: { token },
         transports: ["websocket"],
@@ -52,8 +53,10 @@ const connect = (token) =>
         forceNew: true,
     });
 
-const once = (socket, event) =>
-    new Promise((resolve) => socket.once(event, (...a) => resolve(a.length > 1 ? a : a[0])));
+const once = (socket: ClientSocket, event: string) =>
+    new Promise((resolve) =>
+        socket.once(event, (...a: unknown[]) => resolve(a.length > 1 ? a : a[0])),
+    );
 
 describe("authorization abuse — direct messages", () => {
     it("rejects a direct message to someone who is NOT a friend", async () => {

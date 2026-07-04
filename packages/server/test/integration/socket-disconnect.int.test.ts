@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
-import { createServer } from "node:http";
+import { createServer, type Server as HttpServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import { Server } from "socket.io";
-import { io as ioc } from "socket.io-client";
+import { io as ioc, type Socket as ClientSocket } from "socket.io-client";
 import jwt from "jsonwebtoken";
 import process from "node:process";
 import { SOCKET_EVENTS } from "@realtime-chatapp/common";
@@ -18,9 +19,9 @@ const { redisClient } = await import("../../utils/redis.js");
 const { getHashMapKey } = await import("../../utils/socket/common.js");
 const { disconnectTimers, DISCONNECT_GRACE_MS } = await import("../../constants/socket.js");
 
-let httpServer;
-let io;
-let port;
+let httpServer: HttpServer;
+let io: Server;
+let port: number;
 
 beforeAll(async () => {
     httpServer = createServer();
@@ -36,8 +37,8 @@ beforeAll(async () => {
         }
         registerDisconnect(io, socket);
     });
-    await new Promise((resolve) => httpServer.listen(0, resolve));
-    port = httpServer.address().port;
+    await new Promise<void>((resolve) => httpServer.listen(0, () => resolve()));
+    port = (httpServer.address() as AddressInfo).port;
 });
 
 afterAll(() => {
@@ -50,12 +51,12 @@ beforeEach(() => {
     disconnectTimers.clear();
 });
 
-const tokenFor = (user) =>
+const tokenFor = (user: { username: string; user_id: string; id: number }) =>
     jwt.sign({ username: user.username, user_id: user.user_id, id: user.id }, "test-secret-key", {
         expiresIn: "3h",
     });
 
-const connect = (token) =>
+const connect = (token: string) =>
     ioc(`http://127.0.0.1:${port}`, {
         auth: { token },
         transports: ["websocket"],
@@ -63,8 +64,9 @@ const connect = (token) =>
         forceNew: true,
     });
 
-const once = (socket, event) => new Promise((resolve) => socket.once(event, resolve));
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const once = <T = unknown>(socket: ClientSocket, event: string) =>
+    new Promise<T>((resolve) => socket.once(event, (value) => resolve(value as T)));
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 describe("disconnect grace period", () => {
     it("marks the user offline only after the grace window elapses", async () => {
@@ -101,8 +103,8 @@ describe("disconnect grace period", () => {
 describe("presence is not lost to a friend on reload / multiple connections", () => {
     // Records the OFFLINE (connected === false) notifications a friend receives
     // about `username`, so a test can assert the friend was never told "offline".
-    const recordOfflineFor = (friendSocket, username) => {
-        const offline = [];
+    const recordOfflineFor = (friendSocket: ClientSocket, username: string) => {
+        const offline: string[] = [];
         friendSocket.on(SOCKET_EVENTS.CONNECTION_STATUS_CHANGED, (connected, who) => {
             if (!connected && who === username) offline.push(who);
         });

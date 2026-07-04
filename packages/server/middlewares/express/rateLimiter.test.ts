@@ -1,11 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { Request, Response } from "express";
 
 // Mock the redis singleton's multi().incr().expire().exec() chain.
 const exec = vi.fn();
 const multiChain = {
     incr: vi.fn(() => multiChain),
     expire: vi.fn(() => multiChain),
-    exec: (...args) => exec(...args),
+    exec: (...args: unknown[]) => exec(...args),
 };
 vi.mock("../../utils/redis.js", () => ({
     redisClient: { multi: () => multiChain },
@@ -17,19 +18,19 @@ function makeReqRes() {
     // baseUrl + path identify the route — the limiter keys per-route so one
     // route's traffic can't drain another's budget.
     const req = {
-        headers: {},
+        headers: {} as Record<string, string>,
         socket: { remoteAddress: "1.2.3.4" },
         baseUrl: "/auth",
         path: "/login",
     };
     const res = {
-        statusCode: null,
-        body: null,
-        status(code) {
+        statusCode: null as number | null,
+        body: null as unknown,
+        status(code: number) {
             this.statusCode = code;
             return this;
         },
-        json(payload) {
+        json(payload: unknown) {
             this.body = payload;
             return this;
         },
@@ -49,7 +50,7 @@ describe("rateLimiter", () => {
         exec.mockResolvedValue([3]); // incr -> 3
         const { req, res, next } = makeReqRes();
 
-        await rateLimiter(60, 5)(req, res, next);
+        await rateLimiter(60, 5)(req as unknown as Request, res as unknown as Response, next);
 
         expect(next).toHaveBeenCalledOnce();
         expect(res.statusCode).toBeNull();
@@ -59,7 +60,7 @@ describe("rateLimiter", () => {
         exec.mockResolvedValue([5]); // count === limit, 5 > 5 is false
         const { req, res, next } = makeReqRes();
 
-        await rateLimiter(60, 5)(req, res, next);
+        await rateLimiter(60, 5)(req as unknown as Request, res as unknown as Response, next);
 
         expect(next).toHaveBeenCalledOnce();
     });
@@ -68,7 +69,7 @@ describe("rateLimiter", () => {
         exec.mockResolvedValue([6]); // 6 > 5
         const { req, res, next } = makeReqRes();
 
-        await rateLimiter(60, 5)(req, res, next);
+        await rateLimiter(60, 5)(req as unknown as Request, res as unknown as Response, next);
 
         expect(next).not.toHaveBeenCalled();
         expect(res.statusCode).toBe(429);
@@ -79,7 +80,7 @@ describe("rateLimiter", () => {
         exec.mockResolvedValue([1]);
         const { req, res, next } = makeReqRes();
 
-        await rateLimiter(90, 5)(req, res, next);
+        await rateLimiter(90, 5)(req as unknown as Request, res as unknown as Response, next);
 
         expect(multiChain.incr).toHaveBeenCalledWith(
             "realtime-chatapp:rate-limit:1.2.3.4:/auth/login",
@@ -95,7 +96,7 @@ describe("rateLimiter", () => {
         const { req, res, next } = makeReqRes();
         req.headers["x-forwarded-for"] = "9.9.9.9";
 
-        await rateLimiter(60, 5)(req, res, next);
+        await rateLimiter(60, 5)(req as unknown as Request, res as unknown as Response, next);
 
         expect(multiChain.incr).toHaveBeenCalledWith(
             "realtime-chatapp:rate-limit:9.9.9.9:/auth/login",
@@ -106,7 +107,7 @@ describe("rateLimiter", () => {
         exec.mockRejectedValue(new Error("redis down"));
         const { req, res, next } = makeReqRes();
 
-        await rateLimiter(60, 5)(req, res, next);
+        await rateLimiter(60, 5)(req as unknown as Request, res as unknown as Response, next);
 
         expect(next).not.toHaveBeenCalled();
         expect(res.statusCode).toBe(500);
@@ -118,7 +119,7 @@ describe("rateLimiter", () => {
         process.env.DISABLE_RATE_LIMIT = "true";
         try {
             const { req, res, next } = makeReqRes();
-            await rateLimiter(60, 1)(req, res, next);
+            await rateLimiter(60, 1)(req as unknown as Request, res as unknown as Response, next);
             expect(next).toHaveBeenCalledOnce();
             expect(exec).not.toHaveBeenCalled(); // never touches redis
         } finally {

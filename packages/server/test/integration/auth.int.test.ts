@@ -2,10 +2,13 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import express, { json } from "express";
 import { API_ROUTES } from "@realtime-chatapp/common";
 import jwt from "jsonwebtoken";
+import type { JwtPayload } from "jsonwebtoken";
+import type { Server } from "node:http";
+import type { AddressInfo } from "node:net";
 import { insertUser } from "./helpers.js";
 
-let baseUrl;
-let server;
+let baseUrl: string;
+let server: Server;
 
 beforeAll(async () => {
     // authRouter is firebase-free, so we can mount it on a bare app and fetch it.
@@ -14,22 +17,25 @@ beforeAll(async () => {
     app.set("trust proxy", 1);
     app.use(json());
     app.use(API_ROUTES.AUTH.BASE, authRouter);
-    await new Promise((resolve) => {
-        server = app.listen(0, resolve);
+    await new Promise<void>((resolve) => {
+        server = app.listen(0, () => resolve());
     });
-    baseUrl = `http://127.0.0.1:${server.address().port}`;
+    baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 });
 
 afterAll(() => {
     server?.close();
 });
 
-const post = (path, body) =>
+const post = (path: string, body: unknown) =>
     fetch(`${baseUrl}${path}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
     });
+
+const readJson = async (res: Response) =>
+    (await res.json()) as { loggedIn?: boolean; token?: string; status?: string };
 
 describe("POST /auth/register", () => {
     it("creates a user and returns a valid JWT", async () => {
@@ -37,10 +43,10 @@ describe("POST /auth/register", () => {
             username: "alice1",
             password: "secret1",
         });
-        const data = await res.json();
+        const data = await readJson(res);
 
         expect(data.loggedIn).toBe(true);
-        const decoded = jwt.verify(data.token, "test-secret-key");
+        const decoded = jwt.verify(data.token!, "test-secret-key") as JwtPayload;
         expect(decoded.username).toBe("alice1");
         expect(decoded.user_id).toBeTruthy();
     });
@@ -51,7 +57,7 @@ describe("POST /auth/register", () => {
             username: "bobby1",
             password: "secret1",
         });
-        const data = await res.json();
+        const data = await readJson(res);
         expect(data).toEqual({ loggedIn: false, status: "Username taken" });
     });
 
@@ -71,10 +77,10 @@ describe("POST /auth/login", () => {
             username: "carol1",
             password: "secret1",
         });
-        const data = await res.json();
+        const data = await readJson(res);
 
         expect(data.loggedIn).toBe(true);
-        expect(jwt.verify(data.token, "test-secret-key").username).toBe("carol1");
+        expect((jwt.verify(data.token!, "test-secret-key") as JwtPayload).username).toBe("carol1");
     });
 
     it("rejects a wrong password", async () => {
@@ -83,7 +89,7 @@ describe("POST /auth/login", () => {
             username: "davey1",
             password: "wrongpass",
         });
-        const data = await res.json();
+        const data = await readJson(res);
         expect(data).toEqual({ loggedIn: false, status: "Wrong username or password!" });
     });
 
@@ -92,7 +98,7 @@ describe("POST /auth/login", () => {
             username: "ghost1",
             password: "secret1",
         });
-        const data = await res.json();
+        const data = await readJson(res);
         expect(data.loggedIn).toBe(false);
     });
 });
@@ -100,7 +106,7 @@ describe("POST /auth/login", () => {
 describe("GET /auth/login (handleCheckLogin)", () => {
     it("returns loggedIn:false without a token", async () => {
         const res = await fetch(`${baseUrl}${API_ROUTES.AUTH.LOGIN}`);
-        const data = await res.json();
+        const data = await readJson(res);
         expect(data.loggedIn).toBe(false);
     });
 
@@ -114,7 +120,7 @@ describe("GET /auth/login (handleCheckLogin)", () => {
         const res = await fetch(`${baseUrl}${API_ROUTES.AUTH.LOGIN}`, {
             headers: { authorization: `Bearer ${token}` },
         });
-        const data = await res.json();
+        const data = await readJson(res);
         expect(data).toEqual({ loggedIn: true, token });
     });
 });

@@ -70,7 +70,7 @@ Tooling landed: root `tsconfig.base.json` + per-package `tsconfig.json` (`strict
 - The dead `SOCKET_EVENTS.FRIEND_REQUEST_RECEIVED` listener (an undefined event name → no-op) was removed; strict typing surfaced it.
 - (Client's misspelled `SocketContextProvide` is out of scope now.)
 
-**Scoping note:** the strict `tsc` gate covers **production source only**. Test files (`*.test.ts` + `test/**`) stay `.ts` and run under vitest/esbuild (the behavioral gate) but are excluded from the type gate to keep this stage focused; tightening their typings is a tracked follow-up.
+**Scoping note:** the strict `tsc` gate covers the **whole server + common package, tests included** (`exclude` is just `node_modules`/`coverage`). Test mocks are typed with `as unknown as Socket`/`Request`/`Response` casts and a vitest `ProvidedContext` augmentation (`test/integration/vitest-context.d.ts`) for the `provide`/`inject` channel — so the editor and CI agree everywhere, with no `@ts-nocheck` escape hatches.
 
 ### Stage 2 — Drizzle + friendships → Postgres (clean cutover)
 

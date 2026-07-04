@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import jwt from "jsonwebtoken";
+import type { Socket } from "socket.io";
 
 // authorizeUser verifies the user still exists in Postgres. The unit tier has
 // no DB, so stub the pool; existence/absence is driven per-test below.
@@ -12,12 +13,12 @@ import { authorizeUser } from "./authorizeUser.js";
 
 const SECRET = "test-secret-key"; // from vitest.config.js env
 
-const socketWith = (token) => ({ handshake: { auth: { token } } });
+const socketWith = (token: unknown) => ({ handshake: { auth: { token } } }) as unknown as Socket;
 
 beforeEach(() => {
     vi.clearAllMocks();
     // Default: the user exists in the DB.
-    pool.query.mockResolvedValue([{ user_id: "a1" }]);
+    vi.mocked(pool.query).mockResolvedValue([{ user_id: "a1" }]);
 });
 
 describe("authorizeUser socket middleware", () => {
@@ -54,7 +55,7 @@ describe("authorizeUser socket middleware", () => {
 
     it("rejects a validly-signed token for a user absent from the DB", async () => {
         // Deleted/non-existent account: token verifies, but no DB row exists.
-        pool.query.mockResolvedValueOnce([]);
+        vi.mocked(pool.query).mockResolvedValueOnce([]);
         const token = jwt.sign({ username: "ghost", user_id: "gone" }, SECRET);
         const socket = socketWith(token);
         const next = vi.fn();
@@ -66,7 +67,7 @@ describe("authorizeUser socket middleware", () => {
     });
 
     it("fails closed when the DB lookup throws", async () => {
-        pool.query.mockRejectedValueOnce(new Error("db down"));
+        vi.mocked(pool.query).mockRejectedValueOnce(new Error("db down"));
         const token = jwt.sign({ username: "alice", user_id: "a1" }, SECRET);
         const socket = socketWith(token);
         const next = vi.fn();

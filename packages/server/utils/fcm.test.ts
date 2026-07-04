@@ -9,10 +9,10 @@ vi.mock("../firebase.js", () => ({
     default: { messaging: () => ({ send: vi.fn() }) },
 }));
 vi.mock("./redis.js", () => ({
-    redisClient: { get: (...a) => get(...a), set: (...a) => set(...a) },
+    redisClient: { get: (...a: unknown[]) => get(...a), set: (...a: unknown[]) => set(...a) },
 }));
 vi.mock("./postgres.js", () => ({
-    pool: { query: (...a) => query(...a) },
+    pool: { query: (...a: unknown[]) => query(...a) },
 }));
 
 const { getFcmTokens } = await import("./fcm.js");

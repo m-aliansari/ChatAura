@@ -1,10 +1,5 @@
 {
     "extends": "../../tsconfig.base.json",
     "include": ["**/*.ts"],
-    // The strict type-check gate covers production source. Test files (unit
-    // *.test.ts + the integration/e2e suites under test/**) are heavy on
-    // partial mocks; they stay .ts and run under vitest/esbuild (the behavioral
-    // gate) but are out of the type gate to keep Stage 1 focused. Tightening
-    // test typings is a tracked follow-up.
-    "exclude": ["node_modules", "coverage", "test", "**/*.test.ts"]
+    "exclude": ["node_modules", "coverage"]
 }

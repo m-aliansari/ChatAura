@@ -1,10 +1,11 @@
 import { describe, it, expect, vi } from "vitest";
+import type { Request, Response } from "express";
 import validateForm from "./validateForm.js";
 
 function makeRes() {
     return {
-        statusCode: null,
-        status(code) {
+        statusCode: null as number | null,
+        status(code: number) {
             this.statusCode = code;
             return this;
         },
@@ -18,7 +19,7 @@ describe("validateForm", () => {
         const res = makeRes();
         const next = vi.fn();
 
-        await validateForm(req, res, next);
+        await validateForm(req as unknown as Request, res as unknown as Response, next);
 
         expect(next).toHaveBeenCalledOnce();
         expect(res.statusCode).toBeNull();
@@ -29,7 +30,7 @@ describe("validateForm", () => {
         const res = makeRes();
         const next = vi.fn();
 
-        await validateForm(req, res, next);
+        await validateForm(req as unknown as Request, res as unknown as Response, next);
 
         expect(res.statusCode).toBe(422);
         expect(next).not.toHaveBeenCalled();
@@ -40,7 +41,7 @@ describe("validateForm", () => {
         const res = makeRes();
         const next = vi.fn();
 
-        await validateForm(req, res, next);
+        await validateForm(req as unknown as Request, res as unknown as Response, next);
 
         expect(res.statusCode).toBe(422);
         expect(next).not.toHaveBeenCalled();

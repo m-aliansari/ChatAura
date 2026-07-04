@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { Socket } from "socket.io";
 
 const lRange = vi.fn();
 const lRem = vi.fn();
@@ -6,10 +7,10 @@ const del = vi.fn();
 const rPush = vi.fn();
 vi.mock("../redis.js", () => ({
     redisClient: {
-        lRange: (...a) => lRange(...a),
-        lRem: (...a) => lRem(...a),
-        del: (...a) => del(...a),
-        rPush: (...a) => rPush(...a),
+        lRange: (...a: unknown[]) => lRange(...a),
+        lRem: (...a: unknown[]) => lRem(...a),
+        del: (...a: unknown[]) => del(...a),
+        rPush: (...a: unknown[]) => rPush(...a),
     },
 }));
 
@@ -21,7 +22,7 @@ function makeSocket() {
         socket: {
             user: { username: "alice", user_id: "alice-id" },
             to: vi.fn(() => ({ emit })),
-        },
+        } as unknown as Socket,
         emit,
     };
 }
@@ -39,7 +40,12 @@ describe("handleRemoveFriend", () => {
     it("rejects an invalid friend payload", async () => {
         const { socket } = makeSocket();
         const cb = vi.fn();
-        await handleRemoveFriend(socket, { username: "bob" }, cb); // missing user_id
+        // missing user_id — intentionally malformed payload
+        await handleRemoveFriend(
+            socket,
+            { username: "bob" } as { username: string; user_id: string },
+            cb,
+        );
         expect(cb).toHaveBeenCalledWith({ done: false, errorMsg: "Invalid friend" });
         expect(lRem).not.toHaveBeenCalled();
     });

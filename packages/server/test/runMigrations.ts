@@ -10,7 +10,7 @@ const MIGRATION_FILES = ["0001_create-initial-tables.sql", "0002_add-fcm-field.s
 const migrationsDir = path.resolve(fileURLToPath(new URL(".", import.meta.url)), "../migrations");
 
 /** Applies the Up portion of each migration to the given Postgres connection URI. */
-export async function runMigrations(connectionUri) {
+export async function runMigrations(connectionUri: string) {
     const pgp = pgPromise();
     const db = pgp(connectionUri);
     try {
