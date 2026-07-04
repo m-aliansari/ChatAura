@@ -6,9 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Realtime chat app where users register, add each other as friends, and exchange direct messages over WebSockets. Monorepo managed with **Yarn 4 (Berry) workspaces** under `packages/*`:
 
-- `@realtime-chatapp/client` — React 19 + Vite + Chakra UI v3 frontend
-- `@realtime-chatapp/server` — Express 5 + Socket.io backend
-- `@realtime-chatapp/common` — shared Yup validation schemas and shared constants (`SOCKET_EVENTS`, `API_ROUTES`, `appName`)
+- `@realtime-chatapp/client` — React 19 + Vite + Chakra UI v3 frontend (JavaScript/JSX)
+- `@realtime-chatapp/server` — Express 5 + Socket.io backend (**TypeScript**, run via `tsx`)
+- `@realtime-chatapp/common` — shared Yup validation schemas and shared constants (`SOCKET_EVENTS`, `API_ROUTES`, `appName`) (**TypeScript**)
 
 The `common` package is imported by **both** client and server and is the single source of truth for socket event names, API route paths, and form validation. Change an event/route name there, not in a consumer.
 
@@ -22,7 +22,7 @@ The overarching goal: make the app professional, scalable, and **microservices /
 
 - **Redis is not a database.** Narrow it to cache + pub/sub + ephemeral state. Presence (`connected`), FCM cache-aside, and rate-limit TTL keys are already correct — **do not touch them**.
 - **Postgres = source of truth** for durable/relational data. **Messages and friendships** are currently misplaced in Redis and will move to Postgres.
-- **Adopt TypeScript** — `server` + `common` first, client (JSX) deferred.
+- **Adopt TypeScript** — `server` + `common` **done** (run via `tsx`, `tsc --noEmit` CI gate); client (JSX) deferred. See "TypeScript" under Conventions.
 - **ORM = Drizzle** (chosen over Prisma/Kysely: lightweight, no engine binary, no lock-in, SQL-shaped, k8s-friendly). Standardize new data-access code on it.
 - **Sequencing:** TypeScript first, _then_ Drizzle + the Postgres data migration. First data slice = **friendships** (clean cutover, no backfill), then messages, then Docker.
 - **Microservices posture = Option A: a microservices-_ready_ monolith.** Stay one deployable now; do not physically split services yet (YAGNI).
@@ -40,10 +40,11 @@ The overarching goal: make the app professional, scalable, and **microservices /
 Run from the repo root (workspace-aware scripts):
 
 ```bash
-yarn dev:server      # nodemon server (packages/server)
+yarn dev:server      # tsx watch server (packages/server)
 yarn dev:client      # vite dev server (packages/client)
 yarn build:client    # production client build
-yarn start           # node server (production entry)
+yarn start           # tsx server (production entry)
+yarn typecheck       # tsc --noEmit for common + server (CI gate; tsx does NOT type-check)
 ```
 
 Client lint (no root script — run in the package):
@@ -133,14 +134,15 @@ Client (Vite, `VITE_` prefix required): `VITE_API_BASE_URL`, `VITE_FIREBASE_VAPI
 
 ## Conventions
 
-- ES modules everywhere (`"type": "module"`). Use `.js`/`.jsx` extensions in relative imports.
+- ES modules everywhere (`"type": "module"`). Relative imports use explicit extensions — and **TypeScript source keeps `.js` specifiers even though the files are `.ts`** (e.g. `import { pool } from "./postgres.js"` in `postgres.ts`); `moduleResolution: NodeNext` and `tsx` both resolve `.js`→`.ts`. Do not rewrite these to `.ts`.
+- **TypeScript (server + common):** run via `tsx` (no build step, no `dist/`); type safety is a `tsc --noEmit` gate (`yarn typecheck`), not the runtime — `tsx`/esbuild strip types without checking. Config: root `tsconfig.base.json` (`strict`, `NodeNext`, `verbatimModuleSyntax`, `isolatedModules`) + per-package `tsconfig.json`. The type gate covers the **whole package including tests** (`exclude` is only `node_modules`/`coverage`), so `yarn typecheck` and the editor agree. Test mocks use `as unknown as Socket`/`Request`/`Response` casts; integration tests share Testcontainers config via a vitest `ProvidedContext` augmentation (`test/integration/vitest-context.d.ts`). ESLint flat configs set `parserOptions.tsconfigRootDir: import.meta.dirname` so editors don't fail with "No tsconfigRootDir was set" across the monorepo's multiple tsconfigs. `socket.user` is a `declare module "socket.io"` augmentation in `packages/server/types/socket.ts` (`AuthedUser`); `common` exports its entry as `./index.ts` (Vite and `tsx` both transpile it, so the JS client is unaffected).
 - Server is layered: `routers/` → `controllers/<feature>Controller/` → `utils/` and `queries/`. SQL strings live in `queries/`, route handlers in per-feature controller folders.
 - Express routes are mounted under base paths from `API_ROUTES` (e.g. `app.use(API_ROUTES.AUTH.BASE, authRouter)`), and routers use the `SPECIFIC` sub-paths.
 - Rate limiting is per-IP via Redis (`middlewares/express/rateLimiter.js`), applied as `rateLimiter(seconds, max)` on auth routes.
 
 ## CI & Deployment
 
-CI (`.github/workflows/ci.yml`) runs lint + all three test tiers on every PR and push to `master`. The two production deploys are **both gated on that CI passing**, but by different mechanisms:
+CI (`.github/workflows/ci.yml`) runs lint + **typecheck** (both in the `lint` job) + all three test tiers on every PR and push to `master`. The two production deploys are **both gated on that CI passing**, but by different mechanisms:
 
 - **Client → Netlify** (static). The client build **bundles `@realtime-chatapp/common` in at build time**, so Netlify has no runtime dependency on the workspace. `packages/client/netlify.toml` carries an `ignore` command that **builds only Deploy Previews** (PRs: `PULL_REQUEST=true`) and cancels production/branch builds; the live site is published by a GitHub Actions **build hook** (`NETLIFY_BUILD_HOOK` secret) that fires only after CI is green. Build-hook builds bypass the ignore command, so the gated production deploy still works. Do not enable Netlify's "Stopped builds" toggle — it also disables build hooks.
-- **Server → Render** (Node, **not bundled**). The server resolves `@realtime-chatapp/common` from `node_modules` **at runtime**, and that package is not published to npm — it exists only as a workspace. So Render **must install from the repo root**: Root Directory is blank, Build Command is `corepack enable && yarn` (Yarn 4 workspace install that symlinks `common` and hoists `yup`), Start Command is `yarn start`. If Root Directory were set to `packages/server`, the isolated install would fail to find `common@1.0.0`. Render's **Auto-Deploy = "After CI Checks Pass"** provides the gate natively (no deploy hook needed). DB migrations are **not** auto-applied on deploy — add `yarn workspace @realtime-chatapp/server migrate:up` to Render's Pre-Deploy command if/when migrations must run before boot.
+- **Server → Render** (Node, **not bundled**). The server resolves `@realtime-chatapp/common` from `node_modules` **at runtime**, and that package is not published to npm — it exists only as a workspace. So Render **must install from the repo root**: Root Directory is blank, Build Command is `corepack enable && yarn` (Yarn 4 workspace install that symlinks `common` and hoists `yup`), Start Command is `yarn start` (which now runs `tsx index.ts` — `tsx` is a server runtime dependency, and `common` is imported as TS source that `tsx` transpiles at runtime, so there is still no build step and **these deploy commands are unchanged by the TypeScript migration**). If Root Directory were set to `packages/server`, the isolated install would fail to find `common@1.0.0`. Render's **Auto-Deploy = "After CI Checks Pass"** provides the gate natively (no deploy hook needed). DB migrations are **not** auto-applied on deploy — add `yarn workspace @realtime-chatapp/server migrate:up` to Render's Pre-Deploy command if/when migrations must run before boot.

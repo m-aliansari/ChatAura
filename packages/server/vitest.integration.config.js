@@ -4,9 +4,9 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
     test: {
         environment: "node",
-        globalSetup: ["./test/integration/globalSetup.js"],
-        setupFiles: ["./test/integration/setup.js"],
-        include: ["test/integration/**/*.int.test.js"],
+        globalSetup: ["./test/integration/globalSetup.ts"],
+        setupFiles: ["./test/integration/setup.ts"],
+        include: ["test/integration/**/*.int.test.ts"],
         // One shared container set; avoid cross-file races on the shared DB.
         fileParallelism: false,
         testTimeout: 30000,
@@ -18,7 +18,7 @@ export default defineConfig({
             reporter: ["text", "html", "json"],
             reportsDirectory: "./coverage/integration",
             include: ["controllers/**", "middlewares/**", "utils/**", "queries/**"],
-            exclude: ["**/*.test.js", "**/*.int.test.js", "test/**"],
+            exclude: ["**/*.test.ts", "**/*.int.test.ts", "test/**"],
         },
     },
 });

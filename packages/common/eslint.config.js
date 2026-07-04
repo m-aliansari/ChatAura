@@ -6,7 +6,7 @@ import prettier from "eslint-config-prettier";
 export default tseslint.config(
     { ignores: ["coverage"] },
     {
-        files: ["**/*.{js,mjs,ts}"],
+        files: ["**/*.{js,ts}"],
         extends: [js.configs.recommended, tseslint.configs.recommended],
         languageOptions: {
             ecmaVersion: "latest",

@@ -1,0 +1,27 @@
+{
+    "$schema": "https://json.schemastore.org/tsconfig",
+    "compilerOptions": {
+        // ESM to match "type": "module" everywhere; NodeNext resolves the
+        // codebase's explicit ".js" import specifiers to their ".ts" sources.
+        "module": "NodeNext",
+        "moduleResolution": "NodeNext",
+        "target": "ES2022",
+        "lib": ["ES2023"],
+
+        // We run .ts directly via tsx; tsc is a type-check-only gate.
+        "noEmit": true,
+
+        // Full strictness (Stage 1 decision D4).
+        "strict": true,
+
+        // esbuild/tsx transpile file-by-file — forbid constructs they can't
+        // handle in isolation and keep imports verbatim.
+        "isolatedModules": true,
+        "verbatimModuleSyntax": true,
+
+        "esModuleInterop": true,
+        "resolveJsonModule": true,
+        "skipLibCheck": true,
+        "forceConsistentCasingInFileNames": true
+    }
+}

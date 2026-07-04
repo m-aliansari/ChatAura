@@ -8,8 +8,8 @@ export default defineConfig({
         environment: "node",
         // JWT_SECRET is read at import time in constants/auth.js.
         env: { JWT_SECRET: "test-secret-key" },
-        include: ["**/*.test.js"],
-        exclude: ["**/node_modules/**", "**/*.int.test.js", "test/integration/**"],
+        include: ["**/*.test.ts"],
+        exclude: ["**/node_modules/**", "**/*.int.test.ts", "test/integration/**"],
         coverage: {
             provider: "v8",
             // json emits coverage/unit/coverage-final.json, consumed by the
@@ -17,7 +17,7 @@ export default defineConfig({
             reporter: ["text", "html", "json"],
             reportsDirectory: "./coverage/unit",
             include: ["controllers/**", "middlewares/**", "utils/**", "queries/**"],
-            exclude: ["**/*.test.js", "**/*.int.test.js", "test/**"],
+            exclude: ["**/*.test.ts", "**/*.int.test.ts", "test/**"],
         },
     },
 });
