@@ -44,6 +44,12 @@ Postgres today holds only the `users` table + an `fcm_token[]` column. The goal 
 
 - **Redis role for migrated data:** default = read straight from Postgres (Redis only for presence / pub-sub / rate-limit); add a read cache later **only if profiling shows need**. Revisit per slice.
 - **Client → TypeScript:** yes eventually, not scheduled yet.
+- **Typed Socket.io event contracts (deferred from Stage 1 — its own PR):** Stage 1 typed `socket.user` (a `declare module "socket.io"` augmentation) but left event **payloads** as `DefaultEventsMap`, so `socket.emit(...)` / `socket.on(...)` are **not** payload-checked (event name and arg shapes are effectively `any`). Follow-up:
+    1. Define `ClientToServerEvents`, `ServerToClientEvents`, `InterServerEvents`, `SocketData` interfaces with typed payloads (e.g. `direct_message: (m: { to: string; content: string }, cb: (r: Ack) => void) => void`), keyed off the `SOCKET_EVENTS` string values.
+    2. Put them in **`common`** — they are the shared realtime contract, which aligns with the "`common` → published contracts" direction (Decision D10).
+    3. Parameterize `Server<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>` / `Socket<…>` on the server, and the client's socket instance, so every `emit`/listener is compile-checked end to end.
+    - **Why deferred:** invasive — touches `packages/server/index.ts`, every `packages/server/utils/socket/*` handler, and the client's `utils/socket.js` + `useSocketSetup.jsx`. Kept out of the Stage 1 migration to stay reviewable.
+    - **Optional smaller precursor (cheap, additive):** in `common/index.ts`, add `satisfies Record<string, string>` guards to `SOCKET_EVENTS`/`API_ROUTES` and export a derived `type SocketEvent = (typeof SOCKET_EVENTS)[keyof typeof SOCKET_EVENTS]`. (This is _not_ an enum — `as const` + derived unions is the recommended pattern here; enums aren't erasable under `isolatedModules`/`--experimental-strip-types` and don't travel across the future service boundary.)
 
 ---
 
@@ -66,7 +72,7 @@ Tooling landed: root `tsconfig.base.json` + per-package `tsconfig.json` (`strict
 
 - pg-promise `pool.query` resolves to a **row array** (not `{ rows }`) — call-site generics.
 - JWT helpers return Go-style `[err, result]` tuples — modelled as discriminated tuple unions in `utils/jwt.ts`; `JWT_SECRET` now fails fast at boot if unset.
-- `socket.user` is typed via a `declare module "socket.io"` augmentation (`types/socket.ts`, `AuthedUser`).
+- `socket.user` is typed via a `declare module "socket.io"` augmentation (`types/socket.ts`, `AuthedUser`). **Event payloads were left as `DefaultEventsMap`** (pragmatic) — full typed `emit`/`on` contracts are a deferred follow-up, see "Typed Socket.io event contracts" under _Deferred / open decisions_.
 - The dead `SOCKET_EVENTS.FRIEND_REQUEST_RECEIVED` listener (an undefined event name → no-op) was removed; strict typing surfaced it.
 - (Client's misspelled `SocketContextProvide` is out of scope now.)
 
