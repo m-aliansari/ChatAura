@@ -12,6 +12,12 @@ export default tseslint.config(
             ecmaVersion: "latest",
             sourceType: "module",
             globals: globals.node,
+            // Anchor the TS parser to this package so it doesn't try to infer a
+            // root across the monorepo's multiple tsconfigs (which throws
+            // "No tsconfigRootDir was set" in editors run from the repo root).
+            parserOptions: {
+                tsconfigRootDir: import.meta.dirname,
+            },
         },
         rules: {
             // Mirror the client's convention so intentionally-unused
