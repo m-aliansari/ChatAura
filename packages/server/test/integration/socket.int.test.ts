@@ -17,7 +17,7 @@ const { authorizeUser } = await import("../../middlewares/socket/authorizeUser.j
 const { initializeUser } = await import("../../utils/socket/initializeUser.js");
 const { handleDirectMessage } = await import("../../utils/socket/directMessage.js");
 const { redisClient } = await import("../../utils/redis.js");
-const { getHashMapKey, getFriendsListKey } = await import("../../utils/socket/common.js");
+const { getHashMapKey } = await import("../../utils/socket/common.js");
 
 let httpServer: HttpServer;
 let io: Server;
@@ -200,15 +200,7 @@ describe("connection status propagation", () => {
     it("notifies a friend when a user comes online", async () => {
         const alice = await insertUser();
         const bob = await insertUser();
-        // make them mutual friends in Redis
-        await redisClient.rPush(
-            getFriendsListKey(alice.username),
-            `${bob.username}.${bob.user_id}`,
-        );
-        await redisClient.rPush(
-            getFriendsListKey(bob.username),
-            `${alice.username}.${alice.user_id}`,
-        );
+        await befriend(alice, bob);
 
         const a = connect(tokenFor(alice));
         await once(a, SOCKET_EVENTS.FRIENDS_LIST);

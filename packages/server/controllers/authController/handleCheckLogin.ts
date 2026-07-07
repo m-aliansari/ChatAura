@@ -1,5 +1,5 @@
 import { getJwtTokenFromRequest, jwtVerifyPromise } from "../../utils/jwt.js";
-import { checkUserExists } from "../../utils/users.js";
+import { checkUserExists } from "../../db/repositories/users.js";
 import type { Request, Response } from "express";
 
 export const handleCheckLogin = async (req: Request, res: Response) => {

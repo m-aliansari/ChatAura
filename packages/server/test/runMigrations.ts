@@ -1,25 +1,21 @@
-import pgPromise from "pg-promise";
-import { readFileSync } from "node:fs";
+import { drizzle } from "drizzle-orm/node-postgres";
+import { migrate } from "drizzle-orm/node-postgres/migrator";
+import { Pool } from "pg";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
-const MIGRATION_FILES = ["0001_create-initial-tables.sql", "0002_add-fcm-field.sql"];
+// Resolve relative to this file (packages/server/test/) so it works regardless of the
+// process cwd (vitest runs from the package; Playwright from the client).
+const migrationsFolder = path.resolve(fileURLToPath(new URL(".", import.meta.url)), "../drizzle");
 
-// Resolve relative to this file (packages/server/test/) so it works regardless
-// of the process cwd (vitest runs from the package; Playwright from the client).
-const migrationsDir = path.resolve(fileURLToPath(new URL(".", import.meta.url)), "../migrations");
-
-/** Applies the Up portion of each migration to the given Postgres connection URI. */
+/** Applies all Drizzle migrations to the given Postgres connection URI. Shared by the
+ *  integration globalSetup and the e2e server bootstrap so both build the full schema. */
 export async function runMigrations(connectionUri: string) {
-    const pgp = pgPromise();
-    const db = pgp(connectionUri);
+    const pool = new Pool({ connectionString: connectionUri });
+    const db = drizzle(pool);
     try {
-        for (const file of MIGRATION_FILES) {
-            const sql = readFileSync(path.join(migrationsDir, file), "utf8");
-            const up = sql.split("-- Down Migration")[0];
-            await db.none(up);
-        }
+        await migrate(db, { migrationsFolder });
     } finally {
-        await pgp.end();
+        await pool.end();
     }
 }

@@ -7,10 +7,10 @@
 import { Router } from "express";
 import { hash } from "bcrypt";
 import { v4 as uuidv4 } from "uuid";
-import { pool } from "../utils/postgres.js";
 import { redisClient } from "../utils/redis.js";
-import { ADD_NEW_USER, GET_USER_BY_USERNAME } from "../queries/auth.js";
-import { getHashMapKey, getFriendsListKey } from "../utils/socket/common.js";
+import { addUser, getUserByUsername } from "../db/repositories/users.js";
+import { addFriendship } from "../db/repositories/friendships.js";
+import { getHashMapKey } from "../utils/socket/common.js";
 import { jwtSignPromise } from "../utils/jwt.js";
 
 let seq = 0;
@@ -30,10 +30,10 @@ async function ensureUser({
 }) {
     const name = username ?? uniqName();
 
-    let [user] = await pool.query(GET_USER_BY_USERNAME, [name]);
+    let user = await getUserByUsername(name);
     if (!user) {
         const passhash = await hash(password, 4);
-        [user] = await pool.query(ADD_NEW_USER, [uuidv4(), name, passhash]);
+        user = await addUser({ user_id: uuidv4(), username: name, passhash });
     }
 
     await redisClient.hSet(getHashMapKey(user.username), {
@@ -49,13 +49,12 @@ async function ensureUser({
     return { username: user.username, user_id: user.user_id, id: user.id, token };
 }
 
-// Bidirectional friendship in Redis — same shape handleSocketAddFriend writes.
+// Friendship in Postgres — same canonical row handleSocketAddFriend writes.
 async function befriend(
     a: { username: string; user_id: string },
     b: { username: string; user_id: string },
 ) {
-    await redisClient.rPush(getFriendsListKey(a.username), `${b.username}.${b.user_id}`);
-    await redisClient.rPush(getFriendsListKey(b.username), `${a.username}.${a.user_id}`);
+    await addFriendship(a.user_id, b.user_id);
 }
 
 const router = Router();

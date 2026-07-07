@@ -1,6 +1,5 @@
 import { jwtVerifyPromise } from "../../utils/jwt.js";
-import { pool } from "../../utils/postgres.js";
-import { GET_USER_BY_USER_ID } from "../../queries/auth.js";
+import { getUserByUserId } from "../../db/repositories/users.js";
 import type { Socket } from "socket.io";
 import type { AuthedUser } from "../../types/socket.js";
 
@@ -25,8 +24,8 @@ export const authorizeUser = async (socket: Socket, next: (err?: Error) => void)
     // exists (deleted account). Verify against the source of truth before
     // granting the connection. Fail closed if the lookup itself errors.
     try {
-        const rows = await pool.query(GET_USER_BY_USER_ID, [decoded.user_id]);
-        if (rows.length === 0) {
+        const user = await getUserByUserId(decoded.user_id);
+        if (!user) {
             return next(new Error("Not authorized"));
         }
     } catch (lookupErr) {
