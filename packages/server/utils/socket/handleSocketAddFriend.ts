@@ -1,7 +1,8 @@
-import { GENERIC_ERROR, SOCKET_EVENTS } from "@realtime-chatapp/common";
+import { SOCKET_EVENTS } from "@realtime-chatapp/common";
 import { redisClient } from "../redis.js";
-import { getFriendsListKey, getHashMapKey } from "./common.js";
-import { checkFriendshipStatus } from "./friends.js";
+import { getHashMapKey } from "./common.js";
+import { getUserByUsername } from "../../db/repositories/users.js";
+import { addFriendship } from "../../db/repositories/friendships.js";
 import type { Socket } from "socket.io";
 
 export const handleSocketAddFriend = async (
@@ -18,41 +19,24 @@ export const handleSocketAddFriend = async (
         return;
     }
 
-    const key = getHashMapKey(username);
-    const friend = await redisClient.hGetAll(key);
+    // Resolve the target from Postgres (source of truth) — works even for a registered
+    // user who has never connected (whose Redis presence hash may not exist yet).
+    const friend = await getUserByUsername(username);
 
-    if (!friend || !Object.keys(friend).length) {
+    if (!friend) {
         cb({ done: false, errorMsg: "No such user exists!" });
         return;
     }
 
-    const isFriendAlreadyAdded = await checkFriendshipStatus({
-        username: socket.user.username,
-        friendUsername: username,
-        friendId: friend.user_id,
-    });
+    const { added } = await addFriendship(socket.user.user_id, friend.user_id);
 
-    if (isFriendAlreadyAdded === null) {
-        console.error("Error occurred while checking friendship status.");
-
-        cb({ done: false, errorMsg: GENERIC_ERROR });
-        return;
-    }
-
-    if (isFriendAlreadyAdded) {
+    if (!added) {
         cb({ done: false, errorMsg: "Friend already added!" });
         return;
     }
 
-    await redisClient.lPush(
-        getFriendsListKey(socket.user.username),
-        [username, friend.user_id].join("."),
-    );
-
-    await redisClient.lPush(
-        getFriendsListKey(username),
-        [socket.user.username, socket.user.user_id].join("."),
-    );
+    // Live presence (connected) still comes from Redis; absent hash => offline.
+    const connected = (await redisClient.hGet(getHashMapKey(username), "connected")) === "true";
 
     socket.to(friend.user_id).emit(SOCKET_EVENTS.FRIEND_ADDED, { ...socket.user, connected: true });
 
@@ -61,7 +45,7 @@ export const handleSocketAddFriend = async (
         addedFriend: {
             username,
             user_id: friend.user_id,
-            connected: (friend.connected ?? "false") === "true",
+            connected,
         },
     });
     return;

@@ -57,14 +57,17 @@ describe("POST /fcm/token/save", () => {
         expect(res.status).toBe(400);
     });
 
-    it("500 when the token cannot be stored (no such user row)", async () => {
-        // storeFcmToken UPDATE matches 0 rows -> result[0].fcm_token throws -> 500
+    it("200 for an authenticated save even without a matching users row (fcm_tokens is decoupled)", async () => {
+        // The user_id comes from a verified JWT, and fcm_tokens references users softly by
+        // user_id with NO foreign key (cross-context separability). So the insert succeeds
+        // for a validly-signed but non-existent user. (The former 500 was an artifact of the
+        // old UPDATE crashing on 0 matched rows, not a designed validation.)
         const res = await post(
             API_ROUTES.FCM.TOKEN.SAVE,
             { fcmToken: "t" },
             tokenFor("ghost-user-id"),
         );
-        expect(res.status).toBe(500);
+        expect(res.status).toBe(200);
     });
 
     it("200 and persists the token for a valid user", async () => {

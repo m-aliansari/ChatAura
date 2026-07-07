@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from "vitest";
 import express, { json } from "express";
 import { API_ROUTES } from "@realtime-chatapp/common";
-import { pool } from "../../utils/postgres.js";
+import * as usersRepo from "../../db/repositories/users.js";
 import { GENERIC_ERROR } from "@realtime-chatapp/common";
 import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -22,7 +22,7 @@ beforeAll(async () => {
 });
 
 afterAll(() => server?.close());
-afterEach(() => vi.restoreAllMocks()); // un-stub pool.query so setup's TRUNCATE works
+afterEach(() => vi.restoreAllMocks()); // un-stub the repo spies so later tests hit the real DB
 
 const post = (path: string, body: unknown) =>
     fetch(`${baseUrl}${path}`, {
@@ -36,7 +36,7 @@ const readJson = async (res: Response) =>
 
 describe("auth resilience — server stays graceful when Postgres fails", () => {
     it("login returns a graceful status (not a 500 crash) when the DB is down", async () => {
-        vi.spyOn(pool, "query").mockRejectedValue(new Error("db down"));
+        vi.spyOn(usersRepo, "getUserByUsername").mockRejectedValue(new Error("db down"));
 
         const res = await post(API_ROUTES.AUTH.LOGIN, {
             username: "carol1",
@@ -52,7 +52,8 @@ describe("auth resilience — server stays graceful when Postgres fails", () => 
     });
 
     it("register returns a graceful status when the DB is down", async () => {
-        vi.spyOn(pool, "query").mockRejectedValue(new Error("db down"));
+        // checkUserExists swallows its own error (-> false), so the failure surfaces at the insert.
+        vi.spyOn(usersRepo, "addUser").mockRejectedValue(new Error("db down"));
 
         const res = await post(API_ROUTES.AUTH.REGISTER, {
             username: "newuser1",

@@ -3,13 +3,13 @@ import jwt from "jsonwebtoken";
 import type { Socket } from "socket.io";
 
 // authorizeUser verifies the user still exists in Postgres. The unit tier has
-// no DB, so stub the pool; existence/absence is driven per-test below.
-vi.mock("../../utils/postgres.js", () => ({
-    pool: { query: vi.fn() },
+// no DB, so stub the repository; existence/absence is driven per-test below.
+const getUserByUserId = vi.fn();
+vi.mock("../../db/repositories/users.js", () => ({
+    getUserByUserId: (...a: unknown[]) => getUserByUserId(...a),
 }));
 
-import { pool } from "../../utils/postgres.js";
-import { authorizeUser } from "./authorizeUser.js";
+const { authorizeUser } = await import("./authorizeUser.js");
 
 const SECRET = "test-secret-key"; // from vitest.config.js env
 
@@ -18,7 +18,7 @@ const socketWith = (token: unknown) => ({ handshake: { auth: { token } } }) as u
 beforeEach(() => {
     vi.clearAllMocks();
     // Default: the user exists in the DB.
-    vi.mocked(pool.query).mockResolvedValue([{ user_id: "a1" }]);
+    getUserByUserId.mockResolvedValue({ user_id: "a1" });
 });
 
 describe("authorizeUser socket middleware", () => {
@@ -55,7 +55,7 @@ describe("authorizeUser socket middleware", () => {
 
     it("rejects a validly-signed token for a user absent from the DB", async () => {
         // Deleted/non-existent account: token verifies, but no DB row exists.
-        vi.mocked(pool.query).mockResolvedValueOnce([]);
+        getUserByUserId.mockResolvedValueOnce(undefined);
         const token = jwt.sign({ username: "ghost", user_id: "gone" }, SECRET);
         const socket = socketWith(token);
         const next = vi.fn();
@@ -67,7 +67,7 @@ describe("authorizeUser socket middleware", () => {
     });
 
     it("fails closed when the DB lookup throws", async () => {
-        vi.mocked(pool.query).mockRejectedValueOnce(new Error("db down"));
+        getUserByUserId.mockRejectedValueOnce(new Error("db down"));
         const token = jwt.sign({ username: "alice", user_id: "a1" }, SECRET);
         const socket = socketWith(token);
         const next = vi.fn();

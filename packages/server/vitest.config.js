@@ -16,7 +16,7 @@ export default defineConfig({
             // merge step (scripts/merge-coverage.mjs) to combine with integration.
             reporter: ["text", "html", "json"],
             reportsDirectory: "./coverage/unit",
-            include: ["controllers/**", "middlewares/**", "utils/**", "queries/**"],
+            include: ["controllers/**", "middlewares/**", "utils/**", "db/**"],
             exclude: ["**/*.test.ts", "**/*.int.test.ts", "test/**"],
         },
     },

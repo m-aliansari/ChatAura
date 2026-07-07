@@ -14,17 +14,18 @@ The `common` package is imported by **both** client and server and is the single
 
 ## Architectural Direction & Decisions (roadmap)
 
-> **This section is direction, mostly not-yet-implemented.** It records where the app is going and why. Do NOT read it as current behavior — today messages and friendships still live **only in Redis**. Full detail, staged plan, and deployment targets live in **[`docs/ROADMAP.md`](docs/ROADMAP.md)**; keep the two in sync.
+> **This section is direction, partly implemented.** It records where the app is going and why. **Stage 2 is done:** friendships and FCM tokens now live in **Postgres** (via Drizzle); **messages** still live only in Redis (Stage 3). Full detail, staged plan, and deployment targets live in **[`docs/ROADMAP.md`](docs/ROADMAP.md)**; keep the two in sync.
 
 The overarching goal: make the app professional, scalable, and **microservices / k8s-ready**, by treating Redis correctly and putting durable data in Postgres. Keep these in mind for every change:
 
 **Key decisions:**
 
 - **Redis is not a database.** Narrow it to cache + pub/sub + ephemeral state. Presence (`connected`), FCM cache-aside, and rate-limit TTL keys are already correct — **do not touch them**.
-- **Postgres = source of truth** for durable/relational data. **Messages and friendships** are currently misplaced in Redis and will move to Postgres.
+- **Postgres = source of truth** for durable/relational data. **Friendships** and **FCM tokens** now live in Postgres (Stage 2, via Drizzle); **messages** are still in Redis and move next (Stage 3).
 - **Adopt TypeScript** — `server` + `common` **done** (run via `tsx`, `tsc --noEmit` CI gate); client (JSX) deferred. See "TypeScript" under Conventions.
-- **ORM = Drizzle** (chosen over Prisma/Kysely: lightweight, no engine binary, no lock-in, SQL-shaped, k8s-friendly). Standardize new data-access code on it.
-- **Sequencing:** TypeScript first, _then_ Drizzle + the Postgres data migration. First data slice = **friendships** (clean cutover, no backfill), then messages, then Docker.
+- **ORM = Drizzle** (chosen over Prisma/Kysely: lightweight, no engine binary, no lock-in, SQL-shaped, k8s-friendly). **Adopted (Stage 2):** it is the single data-access layer (pg-promise removed) and owns migrations (`drizzle-kit`). All data-access code goes through `db/` (schema, client, repositories).
+- **New tables must be normalized** (no 1NF/2NF/3NF/BCNF violations); usernames/labels live in their owning table and are joined, not denormalized. See [`docs/DATABASE_NORMALIZATION.md`](docs/DATABASE_NORMALIZATION.md) for the working reference used when adding tables.
+- **Sequencing:** TypeScript (done) → Drizzle + friendships/FCM to Postgres (**done**) → messages to Postgres → Docker.
 - **Microservices posture = Option A: a microservices-_ready_ monolith.** Stay one deployable now; do not physically split services yet (YAGNI).
 - **Do not weight the shared `common` package** as an argument in decisions — as a build-time workspace symlink it won't survive a microservices split (it becomes versioned/published contracts).
 
@@ -53,14 +54,16 @@ Client lint (no root script — run in the package):
 yarn workspace @realtime-chatapp/client lint   # eslint .
 ```
 
-Database migrations (node-pg-migrate, SQL files in `packages/server/migrations/`):
+Database migrations (**Drizzle Kit**, SQL migrations generated into `packages/server/drizzle/` from the `db/schema/` files):
 
 ```bash
-yarn workspace @realtime-chatapp/server migrate:up
-yarn workspace @realtime-chatapp/server migrate:down
-yarn workspace @realtime-chatapp/server migrate:redo     # down then up the last migration
-yarn workspace @realtime-chatapp/server migrate:create <name>
+yarn workspace @realtime-chatapp/server db:generate   # generate a migration from schema changes
+yarn workspace @realtime-chatapp/server db:migrate    # apply pending migrations
+yarn workspace @realtime-chatapp/server db:push       # push schema directly (dev only, no migration file)
+yarn workspace @realtime-chatapp/server db:studio     # open Drizzle Studio
 ```
+
+Edit the relevant `db/schema/<context>.ts` file (one per bounded context; no barrel — consumers import the specific context file directly), run `db:generate` to produce the SQL migration, then `db:migrate` to apply it. `drizzle.config.ts` reads `DATABASE_URL`; the app runtime connects via the discrete `DATABASE_*` vars in `db/index.ts`.
 
 ### Testing
 
@@ -95,18 +98,17 @@ There is no session middleware; auth is JWT-based:
 
 ### Dual datastore: Postgres (durable) + Redis (realtime/ephemeral)
 
-- **PostgreSQL** (via `pg-promise`, `utils/postgres.js`) holds the `users` table and FCM tokens. Note `pool.query(...)` returns an **array of rows directly** (e.g. `result[0]`), not a `{ rows }` object.
-- **Redis** (`utils/redis.js`) holds all realtime state. Key builders live in `utils/socket/common.js`:
-    - `${appName}:user_id:<username>` — hash of `{ user_id, connected }`
-    - `${appName}:friends:<username>` — list of `"<username>.<user_id>"` entries
-    - `${appName}:chat:<user_id>` — list of messages (see format below)
-    - `${appName}:rate-limit:<ip>` and `fcm:tokens:<user_id>` (FCM cache)
+- **PostgreSQL** (via **Drizzle ORM** + node-postgres `pg` pool, `db/index.ts`) holds the `users`, `fcm_tokens`, and `friendships` tables. Schema in `db/schema/*` (one file per bounded context: `users.ts`, `friendships.ts`, `fcmTokens.ts` — **no barrel**; each context file is imported directly by the repository that owns it, keeping cross-context dependencies explicit and each slice extractable); typed data-access in `db/repositories/*` (e.g. `users.ts`, `fcmTokens.ts`, `friendships.ts`). The Drizzle client (`db/index.ts`) is table-agnostic (no aggregate `schema`); each query supplies its own table. Tables reference each other by the stable `user_id` value with **no cross-context FKs** (per roadmap principle 2). `friendships` stores one **canonical row** per pair (`user_a_id < user_b_id`, enforced by a CHECK); `getFriends` joins `users` for usernames.
+- **Redis** (`utils/redis.js`) holds realtime/ephemeral state only. Key builders live in `utils/socket/common.js`:
+    - `${appName}:user_id:<username>` — hash of `{ user_id, connected }` (presence)
+    - `${appName}:chat:<user_id>` — list of messages (see format below; still Redis-only until Stage 3)
+    - `${appName}:rate-limit:<ip>` and `fcm:tokens:<user_id>` (FCM cache-aside; a JSON `string[]` sourced from the `fcm_tokens` table)
 - Redis client switches between local (dev) and authenticated remote (when `NODE_ENV=production`).
 
 ### Socket.io lifecycle (`server/index.js`)
 
 1. `authorizeUser` verifies JWT before connection.
-2. On `connection`, `initializeUser` joins the socket to a room named after `user.user_id`, marks the user `connected` in Redis, and emits `FRIENDS_LIST` + persisted `MESSAGES`.
+2. On `connection`, `initializeUser` joins the socket to a room named after `user.user_id`, marks the user `connected` in Redis, and emits `FRIENDS_LIST` (from Postgres via `getFriends`, enriched with Redis presence) + persisted `MESSAGES` (Redis).
 3. Direct messages and friend adds are emitted to the recipient's `user_id` room (`socket.to(user_id).emit(...)`), so a user receives events on any device/tab.
 4. **Disconnect grace period:** on `disconnecting`, a 3s timer (`disconnectTimers` map in `constants/socket.js`) delays marking the user offline; a reconnect within the window cancels it. This prevents flicker on refresh.
 
@@ -116,7 +118,7 @@ Messages are stored as **dot-joined strings**: `"messageId.to.from.content"`, pu
 
 ### FCM push notifications
 
-`firebase-admin` sends web-push notifications on new messages (`utils/fcm.js`, initialized in `firebase.js`). Requires `packages/server/service-account.json` (gitignored). Tokens are persisted in Postgres and cached in Redis. The client registers a service worker (`packages/client/public/firebase-messaging-sw.js`) and posts `OPEN_CHAT` messages back to the app to deep-link into a conversation.
+`firebase-admin` sends web-push notifications on new messages (`utils/fcm.js`, initialized in `firebase.js`). Requires `packages/server/service-account.json` (gitignored). Tokens are persisted in the Postgres `fcm_tokens` table (one row per `(user_id, token)`) and cached in Redis as a JSON `string[]`. Note `fcm_tokens` has **no FK** to `users`, so an authenticated token-save succeeds even for a since-deleted user (the JWT is the gate). The client registers a service worker (`packages/client/public/firebase-messaging-sw.js`) and posts `OPEN_CHAT` messages back to the app to deep-link into a conversation.
 
 ### Client structure
 
@@ -134,9 +136,9 @@ Client (Vite, `VITE_` prefix required): `VITE_API_BASE_URL`, `VITE_FIREBASE_VAPI
 
 ## Conventions
 
-- ES modules everywhere (`"type": "module"`). Relative imports use explicit extensions — and **TypeScript source keeps `.js` specifiers even though the files are `.ts`** (e.g. `import { pool } from "./postgres.js"` in `postgres.ts`); `moduleResolution: NodeNext` and `tsx` both resolve `.js`→`.ts`. Do not rewrite these to `.ts`.
+- ES modules everywhere (`"type": "module"`). Relative imports use explicit extensions — and **TypeScript source keeps `.js` specifiers even though the files are `.ts`** (e.g. `import { db } from "../index.js"` in `db/repositories/users.ts`); `moduleResolution: NodeNext` and `tsx` both resolve `.js`→`.ts`. Do not rewrite these to `.ts`.
 - **TypeScript (server + common):** run via `tsx` (no build step, no `dist/`); type safety is a `tsc --noEmit` gate (`yarn typecheck`), not the runtime — `tsx`/esbuild strip types without checking. Config: root `tsconfig.base.json` (`strict`, `NodeNext`, `verbatimModuleSyntax`, `isolatedModules`) + per-package `tsconfig.json`. The type gate covers the **whole package including tests** (`exclude` is only `node_modules`/`coverage`), so `yarn typecheck` and the editor agree. Test mocks use `as unknown as Socket`/`Request`/`Response` casts; integration tests share Testcontainers config via a vitest `ProvidedContext` augmentation (`test/integration/vitest-context.d.ts`). ESLint flat configs set `parserOptions.tsconfigRootDir: import.meta.dirname` so editors don't fail with "No tsconfigRootDir was set" across the monorepo's multiple tsconfigs. `socket.user` is a `declare module "socket.io"` augmentation in `packages/server/types/socket.ts` (`AuthedUser`); `common` exports its entry as `./index.ts` (Vite and `tsx` both transpile it, so the JS client is unaffected).
-- Server is layered: `routers/` → `controllers/<feature>Controller/` → `utils/` and `queries/`. SQL strings live in `queries/`, route handlers in per-feature controller folders.
+- Server is layered: `routers/` → `controllers/<feature>Controller/` → `db/repositories/` (typed Drizzle data-access) and `utils/`. Table definitions live in `db/schema/` (one file per bounded context), the pooled Drizzle client in `db/index.ts`; there are **no** raw SQL-string modules. Route handlers live in per-feature controller folders.
 - Express routes are mounted under base paths from `API_ROUTES` (e.g. `app.use(API_ROUTES.AUTH.BASE, authRouter)`), and routers use the `SPECIFIC` sub-paths.
 - Rate limiting is per-IP via Redis (`middlewares/express/rateLimiter.js`), applied as `rateLimiter(seconds, max)` on auth routes.
 
@@ -145,4 +147,4 @@ Client (Vite, `VITE_` prefix required): `VITE_API_BASE_URL`, `VITE_FIREBASE_VAPI
 CI (`.github/workflows/ci.yml`) runs lint + **typecheck** (both in the `lint` job) + all three test tiers on every PR and push to `master`. The two production deploys are **both gated on that CI passing**, but by different mechanisms:
 
 - **Client → Netlify** (static). The client build **bundles `@realtime-chatapp/common` in at build time**, so Netlify has no runtime dependency on the workspace. `packages/client/netlify.toml` carries an `ignore` command that **builds only Deploy Previews** (PRs: `PULL_REQUEST=true`) and cancels production/branch builds; the live site is published by a GitHub Actions **build hook** (`NETLIFY_BUILD_HOOK` secret) that fires only after CI is green. Build-hook builds bypass the ignore command, so the gated production deploy still works. Do not enable Netlify's "Stopped builds" toggle — it also disables build hooks.
-- **Server → Render** (Node, **not bundled**). The server resolves `@realtime-chatapp/common` from `node_modules` **at runtime**, and that package is not published to npm — it exists only as a workspace. So Render **must install from the repo root**: Root Directory is blank, Build Command is `corepack enable && yarn` (Yarn 4 workspace install that symlinks `common` and hoists `yup`), Start Command is `yarn start` (which now runs `tsx index.ts` — `tsx` is a server runtime dependency, and `common` is imported as TS source that `tsx` transpiles at runtime, so there is still no build step and **these deploy commands are unchanged by the TypeScript migration**). If Root Directory were set to `packages/server`, the isolated install would fail to find `common@1.0.0`. Render's **Auto-Deploy = "After CI Checks Pass"** provides the gate natively (no deploy hook needed). DB migrations are **not** auto-applied on deploy — add `yarn workspace @realtime-chatapp/server migrate:up` to Render's Pre-Deploy command if/when migrations must run before boot.
+- **Server → Render** (Node, **not bundled**). The server resolves `@realtime-chatapp/common` from `node_modules` **at runtime**, and that package is not published to npm — it exists only as a workspace. So Render **must install from the repo root**: Root Directory is blank, Build Command is `corepack enable && yarn` (Yarn 4 workspace install that symlinks `common` and hoists `yup`), Start Command is `yarn start` (which now runs `tsx index.ts` — `tsx` is a server runtime dependency, and `common` is imported as TS source that `tsx` transpiles at runtime, so there is still no build step and **these deploy commands are unchanged by the TypeScript migration**). If Root Directory were set to `packages/server`, the isolated install would fail to find `common@1.0.0`. Render's **Auto-Deploy = "After CI Checks Pass"** provides the gate natively (no deploy hook needed). DB migrations are **not** auto-applied on deploy — add `yarn workspace @realtime-chatapp/server db:migrate` (Drizzle Kit) to Render's Pre-Deploy command if/when migrations must run before boot.
