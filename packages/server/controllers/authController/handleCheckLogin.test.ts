@@ -3,7 +3,7 @@ import jwt from "jsonwebtoken";
 import type { Request, Response } from "express";
 
 const checkUserExists = vi.fn();
-vi.mock("../../utils/users.js", () => ({
+vi.mock("../../db/repositories/users.js", () => ({
     checkUserExists: (...a: unknown[]) => checkUserExists(...a),
 }));
 

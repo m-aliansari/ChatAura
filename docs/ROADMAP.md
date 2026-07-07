@@ -1,10 +1,10 @@
 # Architecture Roadmap & Decisions
 
-> **Status: direction, mostly not-yet-implemented.** This document records where the app is going and _why_. As of this writing, messages and friendships still live only in Redis (see "Current state" below). Do not read the roadmap stages as descriptions of current behavior. Each stage lands as its own separate plan/PR.
+> **Status: direction, partly implemented.** This document records where the app is going and _why_. As of this writing, **Stages 1–2 are done**: TypeScript, then friendships + FCM tokens moved to Postgres behind Drizzle. **Messages** still live only in Redis (see "Current state" below). Do not read the later roadmap stages as descriptions of current behavior. Each stage lands as its own separate plan/PR.
 
 ## Why this exists
 
-The app currently treats **Redis as its primary database**: messages and the friendship graph live **only** in Redis as fragile dot-joined strings — `"messageId.to.from.content"` and `"username.user_id"` — pushed to two keys each with **no transactionality**. Consequences:
+The app historically treated **Redis as its primary database**: messages and the friendship graph lived **only** in Redis as fragile dot-joined strings — `"messageId.to.from.content"` and `"username.user_id"` — pushed to two keys each with **no transactionality**. Stage 2 has since moved friendships to Postgres; **messages** remain the last misplaced slice. The original consequences that motivated this work:
 
 - A Redis flush = **permanent loss** of all messages and the entire social graph.
 - Message content containing a `.` corrupts on parse (known bug, e.g. `"3.14"`).
@@ -14,14 +14,14 @@ Postgres today holds only the `users` table + an `fcm_token[]` column. The goal 
 
 ### Current state (what's true today)
 
-| Data                                    | Home today                                              | Correct?              |
-| --------------------------------------- | ------------------------------------------------------- | --------------------- |
-| Users (id, username, passhash, user_id) | Postgres                                                | ✅                    |
-| FCM tokens                              | Postgres `users.fcm_token[]` + Redis cache-aside        | ✅                    |
-| Presence (`connected` flag)             | Redis hash `user_id:<username>`                         | ✅ ephemeral          |
-| Rate-limit counters                     | Redis (TTL keys)                                        | ✅ ephemeral          |
-| **Messages**                            | **Redis only** (`chat:<user_id>` lists, dot-joined)     | ❌ → move to Postgres |
-| **Friendships**                         | **Redis only** (`friends:<username>` lists, dot-joined) | ❌ → move to Postgres |
+| Data                                    | Home today                                              | Correct?                        |
+| --------------------------------------- | ------------------------------------------------------- | ------------------------------- |
+| Users (id, username, passhash, user_id) | Postgres                                                | ✅                              |
+| FCM tokens                              | Postgres `fcm_tokens` table + Redis cache-aside         | ✅ (normalized, Stage 2)        |
+| Presence (`connected` flag)             | Redis hash `user_id:<username>`                         | ✅ ephemeral                    |
+| Rate-limit counters                     | Redis (TTL keys)                                        | ✅ ephemeral                    |
+| **Friendships**                         | Postgres `friendships` (canonical row) + Redis presence | ✅ (Stage 2)                    |
+| **Messages**                            | **Redis only** (`chat:<user_id>` lists, dot-joined)     | ❌ → move to Postgres (Stage 3) |
 
 ---
 
@@ -78,9 +78,14 @@ Tooling landed: root `tsconfig.base.json` + per-package `tsconfig.json` (`strict
 
 **Scoping note:** the strict `tsc` gate covers the **whole server + common package, tests included** (`exclude` is just `node_modules`/`coverage`). Test mocks are typed with `as unknown as Socket`/`Request`/`Response` casts and a vitest `ProvidedContext` augmentation (`test/integration/vitest-context.d.ts`) for the `provide`/`inject` channel — so the editor and CI agree everywhere, with no `@ts-nocheck` escape hatches.
 
-### Stage 2 — Drizzle + friendships → Postgres (clean cutover)
+### Stage 2 — Drizzle + friendships → Postgres ✅ DONE
 
-Add Drizzle + a `friendships` table; repository layer; **transactional** mutual add/remove (fixes today's non-atomic dual `lPush`/`lRem`); read friend lists from Postgres; remove the Redis `friends:*` keys. `user_id`-based references (no cross-context FKs, per principle 2).
+Adopted **Drizzle** as the single data-access layer and migration authority (`drizzle-kit`); **removed pg-promise and node-pg-migrate**. The existing `users` table was re-expressed as a Drizzle migration (safe — no live data), so there is a single clean migration history under `packages/server/drizzle/`.
+
+- **Friendships → Postgres:** a `friendships` table storing **one canonical row per pair** (`user_a_id < user_b_id`, CHECK-enforced, plus a UNIQUE) — a single-row insert/delete is atomic by construction, which is the strongest form of the "transactional mutual add/remove" fix (replaces the old non-atomic dual `lPush`/`lRem`). Canonicalisation is done in SQL (`LEAST`/`GREATEST`) so it always agrees with the CHECK under any collation. `getFriends` **joins `users`** for usernames — usernames stay in `users`, not denormalized. `user_id` refs, **no** cross-context FK (principle 2). The Redis `friends:*` lists are removed; presence (`connected`) stays in Redis and enriches reads.
+- **FCM normalization (folded into this stage):** `users.fcm_token VARCHAR(255)[]` was a **1NF violation**; replaced by an `fcm_tokens` child table (one row per `(user_id, token)`), keeping the Redis cache-aside `string[]` contract identical. No FK to `users`, so an authenticated token-save succeeds even for a since-deleted user (the prior 500 was an incidental crash, not a designed check).
+- **Data-access layout:** `db/schema.ts`, `db/index.ts` (pooled `pg` client), `db/repositories/{users,fcmTokens,friendships}.ts`. Auth queries were converted off pg-promise too → **one library, one connection pool**.
+- **New rule:** tables must be normalized; see [`DATABASE_NORMALIZATION.md`](DATABASE_NORMALIZATION.md) — a generic, project-agnostic reference used when adding tables.
 
 ### Stage 3 — messages → Postgres
 

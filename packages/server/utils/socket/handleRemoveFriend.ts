@@ -1,7 +1,8 @@
 import { SOCKET_EVENTS } from "@realtime-chatapp/common";
 import type { Socket } from "socket.io";
 import { redisClient } from "../redis.js";
-import { getFriendsListKey, getMessagesKey } from "./common.js";
+import { getMessagesKey } from "./common.js";
+import { removeFriendship } from "../../db/repositories/friendships.js";
 
 // Rewrite a user's chat list, dropping every message exchanged with `otherUserId`.
 // We cannot blind-DEL the key (that would wipe ALL conversations), so we filter
@@ -32,24 +33,16 @@ export const handleRemoveFriend = async (
         }
 
         const me = socket.user;
-        const myFriendsKey = getFriendsListKey(me.username);
-        const currentList = await redisClient.lRange(myFriendsKey, 0, -1);
-        const friendEntry = [friend.username, friend.user_id].join(".");
 
-        if (!currentList.includes(friendEntry)) {
+        // Remove the single canonical friendship row (order-independent).
+        const { removed } = await removeFriendship(me.user_id, friend.user_id);
+
+        if (!removed) {
             cb({ done: false, errorMsg: "Not in your friend list" });
             return;
         }
 
-        // Remove from both friend lists (mutual)
-        await redisClient.lRem(myFriendsKey, 0, friendEntry);
-        await redisClient.lRem(
-            getFriendsListKey(friend.username),
-            0,
-            [me.username, me.user_id].join("."),
-        );
-
-        // Delete chat history on both sides
+        // Delete chat history on both sides (messages still live in Redis this stage)
         await removeMessagesBetween(me.user_id, friend.user_id);
         await removeMessagesBetween(friend.user_id, me.user_id);
 

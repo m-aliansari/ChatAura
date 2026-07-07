@@ -1,22 +1,21 @@
 import { compare } from "bcrypt";
-import { pool } from "../../utils/postgres.js";
+import { getUserByUsername } from "../../db/repositories/users.js";
 import { jwtSignPromise } from "../../utils/jwt.js";
-import { GET_USER_BY_USERNAME } from "../../queries/auth.js";
 import { GENERIC_ERROR } from "@realtime-chatapp/common";
 import type { Request, Response } from "express";
 
 export const handleLogin = async (req: Request, res: Response) => {
     try {
-        const potentialLogin = await pool.query(GET_USER_BY_USERNAME, [req.body.username]);
-        if (potentialLogin.length === 0)
+        const potentialLogin = await getUserByUsername(req.body.username);
+        if (!potentialLogin)
             return res.json({ loggedIn: false, status: "Wrong username or password!" });
 
-        const isPassCorrect = await compare(req.body.password, potentialLogin[0].passhash);
+        const isPassCorrect = await compare(req.body.password, potentialLogin.passhash);
 
         if (!isPassCorrect)
             return res.json({ loggedIn: false, status: "Wrong username or password!" });
 
-        const { username, user_id, id } = potentialLogin[0];
+        const { username, user_id, id } = potentialLogin;
         const [err, token] = await jwtSignPromise(
             {
                 username,

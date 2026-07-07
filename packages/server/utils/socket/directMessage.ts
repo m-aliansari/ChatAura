@@ -3,7 +3,7 @@ import { redisClient } from "../redis.js";
 import { getMessagesKey } from "./common.js";
 import { v4 as uuidv4 } from "uuid";
 import { getFcmTokens, sendChatNotifications } from "../fcm.js";
-import { isFriendByUserId } from "./friends.js";
+import { areFriends } from "../../db/repositories/friendships.js";
 import type { Socket } from "socket.io";
 
 export const handleDirectMessage = async (
@@ -16,12 +16,8 @@ export const handleDirectMessage = async (
         const from = socket.user.user_id;
         const messageId = uuidv4();
 
-        const friends = await isFriendByUserId({ username: socket.user.username, friendId: to });
-
-        if (friends === null) {
-            cb({ done: false, errorMsg: GENERIC_ERROR });
-            return;
-        }
+        // A DB error here throws and is handled by the outer catch (-> GENERIC_ERROR).
+        const friends = await areFriends(from, to);
 
         if (!friends) {
             cb({ done: false, errorMsg: "Not friends" });

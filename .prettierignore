@@ -15,3 +15,7 @@ yarn.lock
 .claude/
 .agents/
 skills-lock.json
+
+# Drizzle-generated migrations + metadata — never hand-edited; drizzle-kit rewrites them,
+# so formatting them just causes churn and re-breaks CI.
+**/drizzle/

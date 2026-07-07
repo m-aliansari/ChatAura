@@ -1,20 +1,16 @@
 import { SOCKET_EVENTS } from "@realtime-chatapp/common";
 import type { Socket } from "socket.io";
-import { getFriendsListKey, parseFriendList } from "./common.js";
-import { redisClient } from "../redis.js";
+import { getFriends } from "../../db/repositories/friendships.js";
+import { enrichWithPresence } from "./common.js";
 
 export const emitConnectionStatus = async (
     socket: Socket,
     connected: boolean,
-    friends: string[] | null = null,
+    friends: { username: string; user_id: string }[] | null = null,
 ) => {
-    let friendList = friends ? [...friends] : null;
+    const friendList = friends ?? (await getFriends(socket.user.user_id));
 
-    if (!friendList) {
-        friendList = await redisClient.lRange(getFriendsListKey(socket.user.username), 0, -1);
-    }
-
-    const parsed = await parseFriendList(friendList);
+    const parsed = await enrichWithPresence(friendList);
 
     const friendRooms = parsed.map((friend) => friend.user_id);
 

@@ -1,7 +1,8 @@
 import { SOCKET_EVENTS } from "@realtime-chatapp/common";
 import { emitConnectionStatus } from "./emitConnectionStatus.js";
+import { getFriends } from "../../db/repositories/friendships.js";
 import { redisClient } from "../redis.js";
-import { getFriendsListKey, getHashMapKey, getMessagesKey } from "./common.js";
+import { getHashMapKey, getMessagesKey } from "./common.js";
 import type { Socket } from "socket.io";
 
 export const initializeUser = async (socket: Socket) => {
@@ -12,8 +13,7 @@ export const initializeUser = async (socket: Socket) => {
         connected: "true",
     });
 
-    const key = getFriendsListKey(socket.user.username);
-    const friendList = await redisClient.lRange(key, 0, -1);
+    const friendList = await getFriends(socket.user.user_id);
 
     const parsedList = await emitConnectionStatus(socket, true, friendList);
     const messagesRes = await redisClient.lRange(getMessagesKey(socket.user.user_id), 0, -1);
