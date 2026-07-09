@@ -68,11 +68,13 @@ Edit the relevant `db/schema/<context>.ts` file (one per bounded context; no bar
 Seeding a dev database (for exercising infinite scroll / pagination by hand):
 
 ```bash
-yarn workspace @realtime-chatapp/server db:seed           # 40 friends x 60 messages, user "demo"/"secret1"
+yarn workspace @realtime-chatapp/server db:seed           # 40 friends x 60 messages, user "demouser"/"secret1"
 yarn workspace @realtime-chatapp/server db:seed --reset   # TRUNCATE all tables first
 ```
 
 Defaults deliberately exceed both page sizes (`FRIENDS_PAGE_SIZE=15`, `MESSAGES_PAGE_SIZE=30`) so `LOAD_MORE_FRIENDS` and `LOAD_OLDER` both trigger. Tunable via `SEED_FRIENDS` / `SEED_MESSAGES` / `SEED_USERNAME` / `SEED_PASSWORD`; refuses to run when `NODE_ENV=production`. It goes through the real `addUser` / `addFriendship` repositories (so the `user_a_id < user_b_id` canonicalization is the app's own). **Not** `drizzle-seed`: that generates each column independently and infers row-level relationships from foreign keys, which this schema has none of (soft `user_id` refs, per roadmap principle 2) — it cannot produce canonical friendship pairs or directional messages between befriended users.
+
+⚠️ Writing through the repositories **bypasses the `validateForm` middleware** that guards `/auth/register` and `/auth/login`, and nothing at the DB level enforces the credential rules — so an unvalidated seed can create an account that cannot log in (a 4-char username passes Postgres but fails `authFormSchema`'s `min(6)` and gets a 422). The seeder therefore validates every seeded credential against `authFormSchema` up front and refuses to write anything otherwise. Keep that guard if you change the seed usernames.
 
 ### Testing
 

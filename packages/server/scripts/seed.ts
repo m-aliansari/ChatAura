@@ -14,6 +14,7 @@ import "dotenv/config.js";
 import { hash } from "bcrypt";
 import { sql } from "drizzle-orm";
 import { v4 as uuid } from "uuid";
+import { authFormSchema } from "@realtime-chatapp/common";
 import { db } from "../db/index.js";
 import { messages } from "../db/schema/messages.js";
 import { addUser, getUserByUsername } from "../db/repositories/users.js";
@@ -27,8 +28,23 @@ if (process.env.NODE_ENV === "production") {
 const RESET = process.argv.includes("--reset");
 const FRIENDS = Number(process.env.SEED_FRIENDS ?? 40);
 const MESSAGES = Number(process.env.SEED_MESSAGES ?? 60);
-const USERNAME = process.env.SEED_USERNAME ?? "demo";
+const USERNAME = process.env.SEED_USERNAME ?? "demouser";
 const PASSWORD = process.env.SEED_PASSWORD ?? "secret1";
+
+/**
+ * The seeder writes through the repositories, so it bypasses the `validateForm` middleware that
+ * guards /auth/register and /auth/login. Nothing at the DB level enforces the username/password
+ * rules, so an unvalidated seed can silently create an account you cannot log in with. Validate
+ * every credential against the same schema the HTTP layer uses.
+ */
+const assertLoginable = async (username: string, password: string) => {
+    try {
+        await authFormSchema.validate({ username, password });
+    } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        throw new Error(`Refusing to seed un-loginable account "${username}": ${reason}`);
+    }
+};
 
 /** Reuse an existing user so the seeder is re-runnable without --reset. */
 const ensureUser = async (username: string, passhash: string) => {
@@ -45,6 +61,15 @@ const seed = async () => {
         console.log("Reset: truncated users, fcm_tokens, friendships, messages");
     }
 
+    // Fail fast, before writing anything, if a credential could not pass the login form.
+    const friendNames = Array.from(
+        { length: FRIENDS },
+        (_, i) => `friend${String(i + 1).padStart(2, "0")}`,
+    );
+    for (const username of [USERNAME, ...friendNames]) {
+        await assertLoginable(username, PASSWORD);
+    }
+
     // One hash for every seeded account — bcrypt is deliberately slow, and they share a password.
     const passhash = await hash(PASSWORD, 10);
 
@@ -52,7 +77,7 @@ const seed = async () => {
     console.log(`Primary user: ${me.username} (user_id ${me.user_id})`);
 
     for (let i = 1; i <= FRIENDS; i++) {
-        const friend = await ensureUser(`friend${String(i).padStart(2, "0")}`, passhash);
+        const friend = await ensureUser(friendNames[i - 1], passhash);
         await addFriendship(me.user_id, friend.user_id);
 
         if (MESSAGES > 0) {
@@ -76,7 +101,7 @@ const seed = async () => {
     console.log(
         `\nDone. ${FRIENDS} friends x ${MESSAGES} messages each (${FRIENDS * MESSAGES} messages).`,
     );
-    console.log(`Log in as "${USERNAME}" / "${PASSWORD}".`);
+    console.log(`Log in as "${USERNAME}" / "${PASSWORD}" (friends share the same password).`);
     console.log(
         `Friends list pages at 15 -> scroll the sidebar; conversations page at 30 -> scroll a chat up.`,
     );
