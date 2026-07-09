@@ -88,6 +88,11 @@ export type FriendCursor = { createdAt: string; userId: string };
  * the row-constructor comparison walks the same DESC order without gaps or duplicates. Fetches
  * `limit + 1` to report `hasMore`. Sorting by latest-message is intentionally NOT done here —
  * that's a deferred follow-up and would add a messages-table join.
+ *
+ * `created_at` is selected as **text**, not as a Date: `timestamptz` holds microseconds while a
+ * JS Date only holds milliseconds, so building the cursor from a Date truncated it and silently
+ * skipped any friend created later within the same millisecond. The text form round-trips
+ * exactly through the `::timestamptz` cast below.
  */
 export const getFriendsPage = async (
     userId: string,
@@ -110,7 +115,7 @@ export const getFriendsPage = async (
         .select({
             username: users.username,
             user_id: users.user_id,
-            created_at: friendships.created_at,
+            created_at: sql<string>`${friendships.created_at}::text`,
         })
         .from(friendships)
         .innerJoin(users, sql`${users.user_id} = ${otherSide}`)
@@ -121,7 +126,7 @@ export const getFriendsPage = async (
     const hasMore = rows.length > limit;
     const page = hasMore ? rows.slice(0, limit) : rows;
     const last = page.at(-1);
-    const cursor = last ? { createdAt: last.created_at.toISOString(), userId: last.user_id } : null;
+    const cursor = last ? { createdAt: last.created_at, userId: last.user_id } : null;
 
     return {
         friends: page.map((r) => ({ username: r.username, user_id: r.user_id })),

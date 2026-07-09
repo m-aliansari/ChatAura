@@ -107,6 +107,44 @@ describe("friendships repository (integration)", () => {
         expect(new Set(collected)).toEqual(new Set(friends.map((f) => f.user_id)));
     });
 
+    it("getFriendsPage cursor survives friendships created within the same millisecond", async () => {
+        // Regression: `timestamptz` has microsecond precision but node-postgres parses it into a
+        // JS Date (millisecond). Building the cursor from that Date truncated the microseconds,
+        // so rows in the sub-millisecond window were silently skipped. Force the tie here.
+        const me = await insertUser();
+        const friends = [];
+        for (let i = 0; i < 7; i++) friends.push(await insertUser());
+        for (const f of friends) await addFriendship(me.user_id, f.user_id);
+
+        // Same second AND same millisecond, distinct microseconds (.000001 .. .000007).
+        await db.execute(sql`
+            UPDATE friendships f
+            SET created_at = timestamptz '2026-01-01 00:00:00+00' + (s.rn || ' microseconds')::interval
+            FROM (
+                SELECT user_a_id, user_b_id,
+                       row_number() OVER (ORDER BY user_a_id, user_b_id) AS rn
+                FROM friendships
+            ) s
+            WHERE f.user_a_id = s.user_a_id AND f.user_b_id = s.user_b_id
+        `);
+
+        const limit = 3;
+        const collected: string[] = [];
+        let cursor: { createdAt: string; userId: string } | undefined;
+
+        for (;;) {
+            const page = await getFriendsPage(me.user_id, { before: cursor, limit });
+            collected.push(...page.friends.map((f) => f.user_id));
+            if (!page.hasMore) break;
+            cursor = page.cursor!;
+        }
+
+        // Every friend is reached exactly once despite the identical-millisecond timestamps.
+        expect(collected).toHaveLength(friends.length);
+        expect(new Set(collected).size).toBe(friends.length);
+        expect(new Set(collected)).toEqual(new Set(friends.map((f) => f.user_id)));
+    });
+
     it("getFriendsPage reports hasMore=false and a null cursor for an empty friend list", async () => {
         const loner = await insertUser();
         const page = await getFriendsPage(loner.user_id, { limit: 15 });
