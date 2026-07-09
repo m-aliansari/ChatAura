@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from "vitest";
 import type { Socket } from "socket.io";
 import { REDIS_FCM_TOKENS_PREFIX } from "../../constants/fcm.js";
 import { insertUser, befriend } from "./helpers.js";
@@ -12,8 +12,9 @@ vi.mock("../../firebase.js", () => ({
 
 const { storeFcmToken, getFcmTokens, deleteFcmToken } = await import("../../utils/fcm.js");
 const { handleDirectMessage } = await import("../../utils/socket/directMessage.js");
+const { getConversation } = await import("../../db/repositories/messages.js");
+const { initMessageSentSubscriber } = await import("../../utils/events/messageSentSubscriber.js");
 const { redisClient } = await import("../../utils/redis.js");
-const { getMessagesKey } = await import("../../utils/socket/common.js");
 
 beforeEach(() => {
     sendMock.mockClear();
@@ -75,19 +76,19 @@ describe("FCM token lifecycle (Layer A) — real Postgres + Redis", () => {
     });
 });
 
-describe("handleDirectMessage notification trigger (Layer B)", () => {
-    function fakeSocket(fromUser: { user_id: string; username: string }) {
-        const emit = vi.fn();
-        return {
-            socket: {
-                user: { user_id: fromUser.user_id, username: fromUser.username },
-                to: vi.fn(() => ({ emit })),
-            } as unknown as Socket,
-            emit,
-        };
-    }
+function fakeSocket(fromUser: { user_id: string; username: string }) {
+    const emit = vi.fn();
+    return {
+        socket: {
+            user: { user_id: fromUser.user_id, username: fromUser.username },
+            to: vi.fn(() => ({ emit })),
+        } as unknown as Socket,
+        emit,
+    };
+}
 
-    it("persists the message to both chat lists and acks done", async () => {
+describe("handleDirectMessage persistence (Layer B)", () => {
+    it("persists exactly one message row to Postgres and acks done with the message", async () => {
         const from = await insertUser();
         const to = await insertUser();
         await befriend(from, to);
@@ -96,17 +97,39 @@ describe("handleDirectMessage notification trigger (Layer B)", () => {
 
         await handleDirectMessage(socket, { to: to.user_id, content: "hello" }, cb);
 
-        expect(cb).toHaveBeenCalledWith(expect.objectContaining({ done: true }));
+        expect(cb).toHaveBeenCalledWith(
+            expect.objectContaining({
+                done: true,
+                message: expect.objectContaining({
+                    to: to.user_id,
+                    from: from.user_id,
+                    content: "hello",
+                }),
+            }),
+        );
 
-        const toList = await redisClient.lRange(getMessagesKey(to.user_id), 0, -1);
-        const fromList = await redisClient.lRange(getMessagesKey(from.user_id), 0, -1);
-        expect(toList).toHaveLength(1);
-        expect(fromList).toHaveLength(1);
-        // format: messageId.to.from.content
-        expect(toList[0].endsWith(`.${to.user_id}.${from.user_id}.hello`)).toBe(true);
+        // A single canonical row (not two Redis lists) is the source of truth now.
+        const { messages } = await getConversation(from.user_id, to.user_id, { limit: 10 });
+        expect(messages).toHaveLength(1);
+        expect(messages[0].content).toBe("hello");
+    });
+});
+
+// FCM is decoupled from the send path via a Redis pub/sub event. Start the real subscriber and
+// assert the push fires end-to-end (the consumer's tokens/no-tokens branching is unit-tested in
+// utils/events/messageSentSubscriber.test.ts).
+describe("FCM notification consumer (e2e via Redis pub/sub)", () => {
+    let subscriber: Awaited<ReturnType<typeof initMessageSentSubscriber>>;
+
+    beforeAll(async () => {
+        subscriber = await initMessageSentSubscriber();
     });
 
-    it("sends a push notification when the recipient has FCM tokens", async () => {
+    afterAll(async () => {
+        if (subscriber?.isOpen) await subscriber.quit();
+    });
+
+    it("delivers a push to the recipient's device when a message is sent", async () => {
         const from = await insertUser();
         const to = await insertUser();
         await befriend(from, to);
@@ -115,7 +138,7 @@ describe("handleDirectMessage notification trigger (Layer B)", () => {
 
         await handleDirectMessage(socket, { to: to.user_id, content: "ping" }, vi.fn());
 
-        expect(sendMock).toHaveBeenCalledOnce();
+        await vi.waitFor(() => expect(sendMock).toHaveBeenCalledOnce());
         const [payload] = sendMock.mock.calls[0];
         expect(payload.notification.body).toBe("ping");
         expect(payload.token).toBe("recipient-token");
@@ -123,8 +146,6 @@ describe("handleDirectMessage notification trigger (Layer B)", () => {
     });
 
     it("notifies every one of the recipient's devices (all FCM tokens)", async () => {
-        // SPEC: a user logged in on multiple devices is notified on each.
-        // (Currently only fcmTokens[0] is used — bug backlog.)
         const from = await insertUser();
         const to = await insertUser();
         await befriend(from, to);
@@ -134,19 +155,8 @@ describe("handleDirectMessage notification trigger (Layer B)", () => {
 
         await handleDirectMessage(socket, { to: to.user_id, content: "ping" }, vi.fn());
 
-        expect(sendMock).toHaveBeenCalledTimes(2);
+        await vi.waitFor(() => expect(sendMock).toHaveBeenCalledTimes(2));
         const tokens = sendMock.mock.calls.map((c) => c[0].token).sort();
         expect(tokens).toEqual(["device-1", "device-2"]);
-    });
-
-    it("does NOT send a notification when the recipient has no tokens", async () => {
-        const from = await insertUser();
-        const to = await insertUser();
-        await befriend(from, to);
-        const { socket } = fakeSocket(from);
-
-        await handleDirectMessage(socket, { to: to.user_id, content: "ping" }, vi.fn());
-
-        expect(sendMock).not.toHaveBeenCalled();
     });
 });

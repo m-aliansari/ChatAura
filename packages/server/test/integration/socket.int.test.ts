@@ -82,8 +82,11 @@ describe("initializeUser", () => {
         const user = await insertUser();
         const client = connect(tokenFor(user));
 
-        const friendList = await once(client, SOCKET_EVENTS.FRIENDS_LIST);
-        expect(friendList).toEqual([]);
+        const payload = await once<{ friends: unknown[]; hasMore: boolean; cursor: unknown }>(
+            client,
+            SOCKET_EVENTS.FRIENDS_LIST,
+        );
+        expect(payload).toMatchObject({ friends: [], hasMore: false, cursor: null });
 
         const connected = await redisClient.hGet(getHashMapKey(user.username), "connected");
         expect(connected).toBe("true");

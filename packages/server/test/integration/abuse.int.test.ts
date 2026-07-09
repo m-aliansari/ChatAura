@@ -16,8 +16,7 @@ vi.mock("../../firebase.js", () => ({
 const { authorizeUser } = await import("../../middlewares/socket/authorizeUser.js");
 const { initializeUser } = await import("../../utils/socket/initializeUser.js");
 const { handleDirectMessage } = await import("../../utils/socket/directMessage.js");
-const { redisClient } = await import("../../utils/redis.js");
-const { getMessagesKey } = await import("../../utils/socket/common.js");
+const { getConversation } = await import("../../db/repositories/messages.js");
 
 let httpServer: HttpServer;
 let io: Server;
@@ -72,8 +71,8 @@ describe("authorization abuse — direct messages", () => {
         });
 
         expect(ack.done).toBe(false);
-        const stored = await redisClient.lRange(getMessagesKey(bob.user_id), 0, -1);
-        expect(stored).toHaveLength(0);
+        const { messages } = await getConversation(alice.user_id, bob.user_id, { limit: 10 });
+        expect(messages).toHaveLength(0);
         a.close();
     });
 
@@ -90,8 +89,8 @@ describe("authorization abuse — direct messages", () => {
         });
 
         expect(ack.done).toBe(false);
-        const stored = await redisClient.lRange(getMessagesKey(ghost), 0, -1);
-        expect(stored).toHaveLength(0);
+        const { messages } = await getConversation(alice.user_id, ghost, { limit: 10 });
+        expect(messages).toHaveLength(0);
         a.close();
     });
 
@@ -109,12 +108,11 @@ describe("authorization abuse — direct messages", () => {
             content: "spoof",
         });
 
-        const stored = await redisClient.lRange(getMessagesKey(bob.user_id), 0, -1);
-        if (stored.length) {
-            const [, , from] = stored[0].split(".");
-            expect(from).toBe(alice.user_id);
-            expect(from).not.toBe("victim-spoofed-id");
-        }
+        const { messages } = await getConversation(alice.user_id, bob.user_id, { limit: 10 });
+        expect(messages).toHaveLength(1);
+        // Server derives `from` from the authenticated identity, ignoring the spoofed field.
+        expect(messages[0].from_user_id).toBe(alice.user_id);
+        expect(messages[0].from_user_id).not.toBe("victim-spoofed-id");
         a.close();
     });
 

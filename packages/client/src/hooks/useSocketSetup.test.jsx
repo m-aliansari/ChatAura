@@ -24,11 +24,12 @@ function makeFakeSocket() {
 function renderSocketSetup({ socket, ctx, tabs } = {}) {
     const setUser = ctx?.setUser ?? vi.fn();
     const setFriendList = ctx?.setFriendList ?? vi.fn();
+    const setFriendsMeta = ctx?.setFriendsMeta ?? vi.fn();
     const setMessages = ctx?.setMessages ?? vi.fn();
 
     const wrapper = ({ children }) => (
         <UserContext.Provider value={{ setUser }}>
-            <FriendsContext.Provider value={{ setFriendList }}>
+            <FriendsContext.Provider value={{ setFriendList, setFriendsMeta }}>
                 <MessagesContext.Provider value={{ setMessages }}>
                     <SocketContext.Provider value={{ socket }}>{children}</SocketContext.Provider>
                 </MessagesContext.Provider>
@@ -37,7 +38,7 @@ function renderSocketSetup({ socket, ctx, tabs } = {}) {
     );
 
     const view = renderHook(() => useSocketSetup(tabs), { wrapper });
-    return { view, setUser, setFriendList, setMessages };
+    return { view, setUser, setFriendList, setFriendsMeta, setMessages };
 }
 
 describe("useSocketSetup", () => {
@@ -74,12 +75,15 @@ describe("useSocketSetup", () => {
         }
     });
 
-    it("FRIENDS_LIST replaces the friend list", () => {
+    it("FRIENDS_LIST sets the first page of friends and the pagination cursor", () => {
         const setFriendList = vi.fn();
-        renderSocketSetup({ socket, ctx: { setFriendList } });
-        const list = [{ user_id: "u1" }];
-        socket.emit(SOCKET_EVENTS.FRIENDS_LIST, list);
-        expect(setFriendList).toHaveBeenCalledWith(list);
+        const setFriendsMeta = vi.fn();
+        renderSocketSetup({ socket, ctx: { setFriendList, setFriendsMeta } });
+        const friends = [{ user_id: "u1" }];
+        const cursor = { createdAt: "2026-07-09T00:00:00.000Z", userId: "u1" };
+        socket.emit(SOCKET_EVENTS.FRIENDS_LIST, { friends, hasMore: true, cursor });
+        expect(setFriendList).toHaveBeenCalledWith(friends);
+        expect(setFriendsMeta).toHaveBeenCalledWith({ cursor, hasMore: true, loading: false });
     });
 
     it("FRIEND_ADDED appends a new friend but ignores duplicates", () => {

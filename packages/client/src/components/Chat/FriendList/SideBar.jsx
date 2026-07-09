@@ -2,16 +2,53 @@ import { Button, Heading, HStack, VStack, Separator, Tabs, Dialog } from "@chakr
 import "../../../styles/scrollbar.css";
 
 import { MdAdd } from "react-icons/md";
+import { SOCKET_EVENTS } from "@realtime-chatapp/common";
 import { FriendsContext } from "../../../contexts/Friends/FriendsContext";
-import { useContext } from "react";
+import { SocketContext } from "../../../contexts/Socket/SocketContext.js";
+import { MessagesContext } from "../../../contexts/Messages/MessagesContext.js";
+import { useContext, useRef } from "react";
 import { AddFriendModal } from "./AddFriendModal";
 import { FriendRow } from "./FriendRow.jsx";
 import { FlatLogo } from "../../common/Logo/FlatLogo.jsx";
 import { useLogout } from "../../../hooks/useLogout.jsx";
+import { mergeMessages } from "../../../utils/mergeMessages.js";
 
 export const SideBar = () => {
-    const { friendList } = useContext(FriendsContext);
+    const { friendList, setFriendList, friendsMeta, setFriendsMeta } = useContext(FriendsContext);
+    const { socket } = useContext(SocketContext);
+    const { setMessages } = useContext(MessagesContext);
     const logout = useLogout();
+
+    // Ref mirror of friendsMeta so the scroll handler reads the latest without stale closures.
+    const friendsMetaRef = useRef(friendsMeta);
+    friendsMetaRef.current = friendsMeta;
+
+    const loadMoreFriends = () => {
+        const meta = friendsMetaRef.current;
+        if (!meta.hasMore || meta.loading) return;
+
+        friendsMetaRef.current = { ...meta, loading: true };
+        setFriendsMeta(friendsMetaRef.current);
+
+        socket.emit(
+            SOCKET_EVENTS.LOAD_MORE_FRIENDS,
+            { cursor: meta.cursor },
+            ({ friends, hasMore, cursor, messages }) => {
+                setFriendList((prev) => {
+                    const seen = new Set(prev.map((f) => f.user_id));
+                    return [...prev, ...friends.filter((f) => !seen.has(f.user_id))];
+                });
+                setMessages((prev) => mergeMessages(prev, messages));
+                friendsMetaRef.current = { cursor, hasMore, loading: false };
+                setFriendsMeta(friendsMetaRef.current);
+            },
+        );
+    };
+
+    const handleScroll = (e) => {
+        const el = e.currentTarget;
+        if (el.scrollHeight - el.scrollTop - el.clientHeight < 80) loadMoreFriends();
+    };
 
     return (
         <Dialog.Root placement="center" motionPreset="slide-in-bottom">
@@ -36,6 +73,8 @@ export const SideBar = () => {
                         p={{ base: "1rem", md: "2rem" }}
                         maxH="82vh"
                         overflowY="auto"
+                        onScroll={handleScroll}
+                        data-testid="friends-scroll"
                         backgroundImage={{
                             base: "linear-gradient(to right, #f5f5f5, #e0e0e0)", // light gray gradient for light mode
                             _dark: "linear-gradient(to right, #131313ff, #4a4a4a)", // dark gray gradient for dark mode

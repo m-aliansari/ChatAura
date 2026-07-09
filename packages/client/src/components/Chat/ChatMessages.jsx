@@ -16,6 +16,7 @@ import { ChatBox } from "./ChatBox.jsx";
 import { SOCKET_EVENTS } from "@realtime-chatapp/common";
 import { keyframes } from "@emotion/react";
 import { SocketContext } from "../../contexts/Socket/SocketContext.js";
+import { mergeMessages } from "../../utils/mergeMessages.js";
 
 const dotPulse = keyframes(`
   0%   { opacity: 0.2; transform: scale(1); }
@@ -26,25 +27,27 @@ const dotPulse = keyframes(`
 export const ChatMessages = ({ onBack }) => {
     const { socket } = useContext(SocketContext);
     const { friendList } = useContext(FriendsContext);
-    const { messages, setMessages } = useContext(MessagesContext);
+    const { messages, setMessages, conversationMeta, setConversationMeta } =
+        useContext(MessagesContext);
     const messagesContainerRefs = useRef({});
     const [newMessage, setNewMessage] = useState(null);
     const { value: currentTab } = useTabsContext();
     const [isTyping, setIsTyping] = useState(false);
 
+    // Refs so the scroll handler reads current messages/meta without resubscribing or
+    // capturing stale closures.
+    const messagesRef = useRef(messages);
+    messagesRef.current = messages;
+    const conversationMetaRef = useRef(conversationMeta);
+    conversationMetaRef.current = conversationMeta;
+
     useEffect(() => {
-        socket.on(SOCKET_EVENTS.MESSAGES, (messages) => {
-            setMessages([...messages]);
+        socket.on(SOCKET_EVENTS.MESSAGES, (incoming) => {
+            setMessages((prev) => mergeMessages(prev, incoming));
         });
 
         socket.on(SOCKET_EVENTS.DIRECT_MESSAGE, (newMessage) => {
-            setMessages((prevMsgs) => {
-                const messageExists = prevMsgs.find(
-                    (msg) => msg.messageId === newMessage.messageId,
-                );
-                if (messageExists) return prevMsgs;
-                return [newMessage, ...prevMsgs];
-            });
+            setMessages((prev) => mergeMessages(prev, [newMessage]));
         });
         socket.on(SOCKET_EVENTS.TYPING, ({ from }) => {
             if (from === currentTab) setIsTyping(true);
@@ -63,12 +66,69 @@ export const ChatMessages = ({ onBack }) => {
         };
     }, [setMessages, currentTab, socket]);
 
+    // Auto-scroll to newest — but only when the current conversation gains a *newer* message
+    // (a live/sent message) or the tab changes. Loading OLDER messages must NOT yank the view
+    // back to the bottom, or infinite scroll is unusable.
+    const newestIdRef = useRef(0);
+    const lastTabRef = useRef(currentTab);
     useEffect(() => {
         const el = messagesContainerRefs.current?.[currentTab];
-        if (el) {
-            el.scrollTo({ top: 0, behavior: "smooth" });
+        if (!el) return;
+
+        const newestId = messages.reduce(
+            (max, m) => (m.to === currentTab || m.from === currentTab ? Math.max(max, m.id) : max),
+            0,
+        );
+        const tabChanged = lastTabRef.current !== currentTab;
+        lastTabRef.current = currentTab;
+
+        if (tabChanged || newestId > newestIdRef.current) {
+            el.scrollTo({ top: 0, behavior: tabChanged ? "auto" : "smooth" });
         }
+        newestIdRef.current = newestId;
     }, [messages, currentTab]);
+
+    // Fetch the previous page of a conversation when the user scrolls to the oldest message.
+    const loadOlder = (friendUserId) => {
+        const meta = conversationMetaRef.current[friendUserId] ?? {
+            hasMore: true,
+            loading: false,
+        };
+        if (!meta.hasMore || meta.loading) return;
+
+        // Guard immediately via the ref — scroll can fire repeatedly before state commits.
+        conversationMetaRef.current = {
+            ...conversationMetaRef.current,
+            [friendUserId]: { ...meta, loading: true },
+        };
+        setConversationMeta(conversationMetaRef.current);
+
+        const convo = messagesRef.current.filter(
+            (m) => m.to === friendUserId || m.from === friendUserId,
+        );
+        const before = convo.length ? Math.min(...convo.map((m) => m.id)) : undefined;
+
+        socket.emit(
+            SOCKET_EVENTS.LOAD_OLDER,
+            { friendUserId, before },
+            ({ messages: older, hasMore }) => {
+                setMessages((prev) => mergeMessages(prev, older));
+                conversationMetaRef.current = {
+                    ...conversationMetaRef.current,
+                    [friendUserId]: { hasMore, loading: false },
+                };
+                setConversationMeta(conversationMetaRef.current);
+            },
+        );
+    };
+
+    const handleScroll = (friendUserId) => (e) => {
+        const el = e.currentTarget;
+        // column-reverse: newest sits at scrollTop≈0; the oldest edge is reached as |scrollTop|
+        // approaches (scrollHeight - clientHeight).
+        const distanceFromOldest = el.scrollHeight - el.clientHeight - Math.abs(el.scrollTop);
+        if (distanceFromOldest < 80) loadOlder(friendUserId);
+    };
 
     return friendList?.length ? (
         <>
@@ -108,6 +168,8 @@ export const ChatMessages = ({ onBack }) => {
                         flexDir="column-reverse"
                         px="1rem"
                         ref={(el) => (messagesContainerRefs.current[friend.user_id] = el)}
+                        onScroll={handleScroll(friend.user_id)}
+                        data-testid={`messages-scroll:${friend.user_id}`}
                         flex="1"
                     >
                         <VStack justify="flex-start" flexDir="column-reverse" mt="auto">

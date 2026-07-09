@@ -35,6 +35,8 @@ afterAll(async () => {
 
 // Fresh state before every test: empty Postgres tables + empty Redis.
 beforeEach(async () => {
-    await db.execute(sql`TRUNCATE users, fcm_tokens, friendships RESTART IDENTITY CASCADE`);
+    await db.execute(
+        sql`TRUNCATE users, fcm_tokens, friendships, messages RESTART IDENTITY CASCADE`,
+    );
     await redisClient.flushAll();
 });
