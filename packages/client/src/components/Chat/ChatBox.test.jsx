@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Tabs } from "@chakra-ui/react";
 import { SOCKET_EVENTS } from "@realtime-chatapp/common";
@@ -52,6 +52,58 @@ describe("ChatBox", () => {
         expect(setNewMessage).toHaveBeenCalled();
         const committed = setMessages.mock.calls.at(-1)[0];
         expect(committed([])).toEqual([saved]);
+    });
+
+    it("drops the optimistic 'temp' entry when committing the persisted message", async () => {
+        const saved = { id: 2, messageId: "m2", to: "bob-id", from: "me-id", content: "hello" };
+        const { setMessages } = setup((event, message, cb) => {
+            if (typeof cb === "function") cb({ done: true, message: saved });
+        });
+
+        await userEvent.type(screen.getByPlaceholderText("Type message here..."), "hello");
+        await userEvent.click(screen.getByRole("button", { name: "Send" }));
+
+        const committed = setMessages.mock.calls.at(-1)[0];
+        const prev = [
+            { messageId: "temp", to: "bob-id", from: null, content: "hello" },
+            { id: 1, messageId: "m1", to: "bob-id", from: "me-id", content: "earlier" },
+        ];
+        // the stale optimistic entry is filtered out; the persisted row leads
+        expect(committed(prev).map((m) => m.messageId)).toEqual(["m2", "m1"]);
+    });
+
+    it("does not commit anything when the server rejects the send", async () => {
+        const { setMessages, setNewMessage } = setup((event, message, cb) => {
+            if (typeof cb === "function") cb({ done: false, errorMsg: "Not friends" });
+        });
+
+        await userEvent.type(screen.getByPlaceholderText("Type message here..."), "hello");
+        await userEvent.click(screen.getByRole("button", { name: "Send" }));
+
+        // the optimistic preview is cleared, but nothing is added to the message list
+        expect(setNewMessage).toHaveBeenCalledWith(null);
+        expect(setMessages).not.toHaveBeenCalled();
+    });
+
+    it("emits TYPING on keystroke and STOP_TYPING once the user idles for 2s", () => {
+        // fireEvent (not userEvent) so the debounce can be driven by fake timers.
+        vi.useFakeTimers();
+        try {
+            const { socket } = setup();
+
+            fireEvent.change(screen.getByPlaceholderText("Type message here..."), {
+                target: { value: "h" },
+            });
+            expect(socket.emit).toHaveBeenCalledWith(SOCKET_EVENTS.TYPING, { to: "bob-id" });
+            expect(socket.emit).not.toHaveBeenCalledWith(SOCKET_EVENTS.STOP_TYPING, {
+                to: "bob-id",
+            });
+
+            act(() => vi.advanceTimersByTime(2000));
+            expect(socket.emit).toHaveBeenCalledWith(SOCKET_EVENTS.STOP_TYPING, { to: "bob-id" });
+        } finally {
+            vi.useRealTimers();
+        }
     });
 
     it("does not emit an empty message", async () => {
