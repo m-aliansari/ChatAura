@@ -6,6 +6,7 @@ import {
     addFriendship,
     areFriends,
     getFriends,
+    getFriendsPage,
     removeFriendship,
 } from "../../db/repositories/friendships.js";
 import { insertUser } from "./helpers.js";
@@ -73,5 +74,44 @@ describe("friendships repository (integration)", () => {
         expect(await getFriends(bob.user_id)).toEqual([
             { username: alice.username, user_id: alice.user_id },
         ]);
+    });
+
+    it("getFriendsPage walks all friends via the cursor in a stable order, without gaps or dupes", async () => {
+        const me = await insertUser();
+        const friends = [];
+        for (let i = 0; i < 7; i++) friends.push(await insertUser());
+        for (const f of friends) await addFriendship(me.user_id, f.user_id);
+
+        const limit = 3;
+        const collected: string[] = [];
+        let cursor: { createdAt: string; userId: string } | undefined;
+        let pages = 0;
+
+        for (;;) {
+            const page = await getFriendsPage(me.user_id, { before: cursor, limit });
+            pages++;
+            expect(page.friends.length).toBeLessThanOrEqual(limit);
+            collected.push(...page.friends.map((f) => f.user_id));
+            if (!page.hasMore) {
+                expect(page.cursor).not.toBeNull();
+                break;
+            }
+            expect(page.cursor).not.toBeNull();
+            cursor = page.cursor!;
+        }
+
+        // 7 friends over pages of 3 => 3 pages (3 + 3 + 1), full coverage, no duplicates.
+        expect(pages).toBe(3);
+        expect(collected).toHaveLength(friends.length);
+        expect(new Set(collected).size).toBe(friends.length);
+        expect(new Set(collected)).toEqual(new Set(friends.map((f) => f.user_id)));
+    });
+
+    it("getFriendsPage reports hasMore=false and a null cursor for an empty friend list", async () => {
+        const loner = await insertUser();
+        const page = await getFriendsPage(loner.user_id, { limit: 15 });
+        expect(page.friends).toEqual([]);
+        expect(page.hasMore).toBe(false);
+        expect(page.cursor).toBeNull();
     });
 });

@@ -26,9 +26,18 @@ function setup(emitImpl) {
 
 describe("ChatBox", () => {
     it("emits DIRECT_MESSAGE to the active conversation and optimistically renders", async () => {
-        // Only DIRECT_MESSAGE passes an ack callback; TYPING/STOP_TYPING do not.
+        // Only DIRECT_MESSAGE passes an ack callback; TYPING/STOP_TYPING do not. The server
+        // acks with the persisted message (real id + messageId), which the client commits.
+        const saved = {
+            id: 1,
+            messageId: "m1",
+            to: "bob-id",
+            from: "me-id",
+            content: "hello",
+            createdAt: "2026-07-09T00:00:00.000Z",
+        };
         const { socket, setMessages, setNewMessage } = setup((event, message, cb) => {
-            if (typeof cb === "function") cb({ done: true, messageId: "m1" });
+            if (typeof cb === "function") cb({ done: true, message: saved });
         });
 
         await userEvent.type(screen.getByPlaceholderText("Type message here..."), "hello");
@@ -39,12 +48,10 @@ describe("ChatBox", () => {
             expect.objectContaining({ to: "bob-id", content: "hello" }),
             expect.any(Function),
         );
-        // optimistic preview, then committed on ack
+        // optimistic preview, then the persisted row committed on ack
         expect(setNewMessage).toHaveBeenCalled();
         const committed = setMessages.mock.calls.at(-1)[0];
-        expect(committed([])).toEqual([
-            expect.objectContaining({ content: "hello", messageId: "m1" }),
-        ]);
+        expect(committed([])).toEqual([saved]);
     });
 
     it("does not emit an empty message", async () => {

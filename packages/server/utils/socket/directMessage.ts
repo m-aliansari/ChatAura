@@ -1,15 +1,15 @@
 import { GENERIC_ERROR, SOCKET_EVENTS } from "@realtime-chatapp/common";
-import { redisClient } from "../redis.js";
-import { getMessagesKey } from "./common.js";
 import { v4 as uuidv4 } from "uuid";
-import { getFcmTokens, sendChatNotifications } from "../fcm.js";
 import { areFriends } from "../../db/repositories/friendships.js";
+import { saveMessage } from "../../db/repositories/messages.js";
+import { publishMessageSent } from "../events/messageSentSubscriber.js";
+import { toWireMessage, type WireMessage } from "./common.js";
 import type { Socket } from "socket.io";
 
 export const handleDirectMessage = async (
     socket: Socket,
     message: { to: string; content: string },
-    cb: (response: { done: boolean; errorMsg?: string; messageId?: string }) => void,
+    cb: (response: { done: boolean; errorMsg?: string; message?: WireMessage }) => void,
 ) => {
     try {
         const { to, content } = message;
@@ -24,20 +24,22 @@ export const handleDirectMessage = async (
             return;
         }
 
-        const messageString = [messageId, to, from, content].join(".");
+        // Single atomic INSERT (Postgres is now the source of truth) — replaces the old
+        // non-transactional pair of Redis lPushes and the fragile dot-joined string.
+        const row = await saveMessage({
+            message_id: messageId,
+            from_user_id: from,
+            to_user_id: to,
+            content,
+        });
+        const wire = toWireMessage(row);
 
-        await redisClient.lPush(getMessagesKey(to), messageString);
-        await redisClient.lPush(getMessagesKey(from), messageString);
+        // Decouple FCM: publish an event and move on — a subscriber sends the push, so
+        // notification latency/errors stay off the message send path (roadmap principle 4).
+        await publishMessageSent({ to, from, content, messageId });
 
-        // Get user's FCM tokens
-        const fcmTokens = await getFcmTokens(to);
-
-        if (fcmTokens.length > 0)
-            // Send notification to all FCM tokens
-            await sendChatNotifications(fcmTokens, content, from);
-
-        socket.to(to).emit(SOCKET_EVENTS.DIRECT_MESSAGE, { to, from, content, messageId });
-        cb({ done: true, messageId });
+        socket.to(to).emit(SOCKET_EVENTS.DIRECT_MESSAGE, wire);
+        cb({ done: true, message: wire });
     } catch {
         cb({ done: false, errorMsg: GENERIC_ERROR });
     }

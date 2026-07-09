@@ -13,7 +13,14 @@ function setup({ friendList, messages }) {
     renderWithProviders(
         <SocketContext.Provider value={{ socket }}>
             <FriendsContext.Provider value={{ friendList }}>
-                <MessagesContext.Provider value={{ messages, setMessages: vi.fn() }}>
+                <MessagesContext.Provider
+                    value={{
+                        messages,
+                        setMessages: vi.fn(),
+                        conversationMeta: {},
+                        setConversationMeta: vi.fn(),
+                    }}
+                >
                     <Tabs.Root value="bob-id">
                         <ChatMessages />
                     </Tabs.Root>
@@ -48,7 +55,14 @@ describe("ChatMessages", () => {
         const { unmount } = renderWithProviders(
             <SocketContext.Provider value={{ socket }}>
                 <FriendsContext.Provider value={{ friendList: [] }}>
-                    <MessagesContext.Provider value={{ messages: [], setMessages: vi.fn() }}>
+                    <MessagesContext.Provider
+                        value={{
+                            messages: [],
+                            setMessages: vi.fn(),
+                            conversationMeta: {},
+                            setConversationMeta: vi.fn(),
+                        }}
+                    >
                         <Tabs.Root value={null}>
                             <ChatMessages />
                         </Tabs.Root>
@@ -69,7 +83,14 @@ describe("ChatMessages", () => {
                 <FriendsContext.Provider
                     value={{ friendList: [{ username: "bob", user_id: "bob-id" }] }}
                 >
-                    <MessagesContext.Provider value={{ messages: [], setMessages }}>
+                    <MessagesContext.Provider
+                        value={{
+                            messages: [],
+                            setMessages,
+                            conversationMeta: {},
+                            setConversationMeta: vi.fn(),
+                        }}
+                    >
                         <Tabs.Root value="bob-id">
                             <ChatMessages />
                         </Tabs.Root>
@@ -79,10 +100,11 @@ describe("ChatMessages", () => {
         );
 
         const handler = socket.on.mock.calls.find((c) => c[0] === SOCKET_EVENTS.DIRECT_MESSAGE)[1];
-        handler({ messageId: "m1", to: "bob-id", from: "me", content: "hi" });
+        handler({ id: 1, messageId: "m1", to: "bob-id", from: "me", content: "hi" });
         const updater = setMessages.mock.calls.at(-1)[0];
 
-        const prev = [{ messageId: "m1", to: "bob-id", from: "me", content: "hi" }];
-        expect(updater(prev)).toBe(prev); // duplicate id -> list unchanged
+        const prev = [{ id: 1, messageId: "m1", to: "bob-id", from: "me", content: "hi" }];
+        // duplicate messageId -> merged list does not grow
+        expect(updater(prev)).toHaveLength(1);
     });
 });

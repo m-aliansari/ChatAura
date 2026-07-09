@@ -1,4 +1,4 @@
-import { and, eq, or, sql } from "drizzle-orm";
+import { and, desc, eq, or, sql } from "drizzle-orm";
 import { db } from "../index.js";
 import { friendships } from "../schema/friendships.js";
 // Cross-context read: the social repo joins `users` for usernames. Explicit import keeps this
@@ -77,4 +77,55 @@ export const getFriends = async (
             sql`${users.user_id} = CASE WHEN ${friendships.user_a_id} = ${userId} THEN ${friendships.user_b_id} ELSE ${friendships.user_a_id} END`,
         )
         .where(or(eq(friendships.user_a_id, userId), eq(friendships.user_b_id, userId)));
+};
+
+export type FriendCursor = { createdAt: string; userId: string };
+
+/**
+ * A page of a user's friends, ordered by friendship recency (`created_at DESC`, `user_id`
+ * tiebreak) — a stable, deterministic order for infinite scroll. Pass `before` (the previous
+ * page's `cursor`) to continue. Cursor is the `(created_at, user_id)` tuple of the last row;
+ * the row-constructor comparison walks the same DESC order without gaps or duplicates. Fetches
+ * `limit + 1` to report `hasMore`. Sorting by latest-message is intentionally NOT done here —
+ * that's a deferred follow-up and would add a messages-table join.
+ */
+export const getFriendsPage = async (
+    userId: string,
+    { before, limit }: { before?: FriendCursor; limit: number },
+): Promise<{
+    friends: { username: string; user_id: string }[];
+    hasMore: boolean;
+    cursor: FriendCursor | null;
+}> => {
+    const otherSide = sql`CASE WHEN ${friendships.user_a_id} = ${userId} THEN ${friendships.user_b_id} ELSE ${friendships.user_a_id} END`;
+    const membership = or(eq(friendships.user_a_id, userId), eq(friendships.user_b_id, userId));
+    const where = before
+        ? and(
+              membership,
+              sql`(${friendships.created_at}, ${users.user_id}) < (${before.createdAt}::timestamptz, ${before.userId})`,
+          )
+        : membership;
+
+    const rows = await db
+        .select({
+            username: users.username,
+            user_id: users.user_id,
+            created_at: friendships.created_at,
+        })
+        .from(friendships)
+        .innerJoin(users, sql`${users.user_id} = ${otherSide}`)
+        .where(where)
+        .orderBy(desc(friendships.created_at), desc(users.user_id))
+        .limit(limit + 1);
+
+    const hasMore = rows.length > limit;
+    const page = hasMore ? rows.slice(0, limit) : rows;
+    const last = page.at(-1);
+    const cursor = last ? { createdAt: last.created_at.toISOString(), userId: last.user_id } : null;
+
+    return {
+        friends: page.map((r) => ({ username: r.username, user_id: r.user_id })),
+        hasMore,
+        cursor,
+    };
 };

@@ -35,9 +35,14 @@ export const ChatBox = ({ setNewMessage }) => {
                     content: values.message,
                     messageId: "temp",
                 };
-                socket.emit(SOCKET_EVENTS.DIRECT_MESSAGE, message, ({ done, messageId }) => {
+                socket.emit(SOCKET_EVENTS.DIRECT_MESSAGE, message, ({ done, message: saved }) => {
                     setNewMessage(null);
-                    if (done) setMessages((prevMsgs) => [{ ...message, messageId }, ...prevMsgs]);
+                    // Reconcile the optimistic bubble with the persisted row (real id + createdAt).
+                    if (done)
+                        setMessages((prevMsgs) => [
+                            saved,
+                            ...prevMsgs.filter((m) => m.messageId !== "temp"),
+                        ]);
                 });
                 setNewMessage({ ...message });
 

@@ -7,7 +7,7 @@ import { MessagesContext } from "../contexts/Messages/MessagesContext.js";
 
 export const useSocketSetup = (tabs) => {
     const { setUser } = useContext(UserContext);
-    const { setFriendList } = useContext(FriendsContext);
+    const { setFriendList, setFriendsMeta } = useContext(FriendsContext);
     const { setMessages } = useContext(MessagesContext);
     const { socket } = useContext(SocketContext);
 
@@ -18,8 +18,9 @@ export const useSocketSetup = (tabs) => {
     useEffect(() => {
         socket.connect();
 
-        socket.on(SOCKET_EVENTS.FRIENDS_LIST, (friendList) => {
-            setFriendList(friendList);
+        socket.on(SOCKET_EVENTS.FRIENDS_LIST, ({ friends, hasMore, cursor }) => {
+            setFriendList(friends);
+            setFriendsMeta({ cursor, hasMore, loading: false });
         });
 
         socket.on(SOCKET_EVENTS.FRIEND_ADDED, (newFriend) => {
@@ -67,5 +68,5 @@ export const useSocketSetup = (tabs) => {
             socket.off(SOCKET_EVENTS.CONNECTION_STATUS_CHANGED);
             socket.off(SOCKET_EVENTS.CONNECTION_ERROR);
         };
-    }, [setUser, setFriendList, setMessages, socket]);
+    }, [setUser, setFriendList, setFriendsMeta, setMessages, socket]);
 };

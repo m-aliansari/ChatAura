@@ -2,19 +2,13 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { Socket } from "socket.io";
 
 const removeFriendship = vi.fn();
-const lRange = vi.fn();
-const del = vi.fn();
-const rPush = vi.fn();
+const deleteConversation = vi.fn();
 
 vi.mock("../../db/repositories/friendships.js", () => ({
     removeFriendship: (...a: unknown[]) => removeFriendship(...a),
 }));
-vi.mock("../redis.js", () => ({
-    redisClient: {
-        lRange: (...a: unknown[]) => lRange(...a),
-        del: (...a: unknown[]) => del(...a),
-        rPush: (...a: unknown[]) => rPush(...a),
-    },
+vi.mock("../../db/repositories/messages.js", () => ({
+    deleteConversation: (...a: unknown[]) => deleteConversation(...a),
 }));
 
 const { handleRemoveFriend } = await import("./handleRemoveFriend.js");
@@ -34,9 +28,8 @@ const bob = { username: "bob", user_id: "bob-id" };
 
 beforeEach(() => {
     removeFriendship.mockReset();
-    lRange.mockReset();
-    del.mockReset();
-    rPush.mockReset();
+    deleteConversation.mockReset();
+    deleteConversation.mockResolvedValue({ deleted: 0 });
 });
 
 describe("handleRemoveFriend", () => {
@@ -59,17 +52,11 @@ describe("handleRemoveFriend", () => {
         const cb = vi.fn();
         await handleRemoveFriend(socket, bob, cb);
         expect(cb).toHaveBeenCalledWith({ done: false, errorMsg: "Not in your friend list" });
-        expect(del).not.toHaveBeenCalled();
+        expect(deleteConversation).not.toHaveBeenCalled();
     });
 
-    it("removes the friendship, prunes shared messages, notifies, and acks done", async () => {
+    it("removes the friendship, deletes the conversation, notifies, and acks done", async () => {
         removeFriendship.mockResolvedValue({ removed: true });
-        lRange.mockImplementation(async (key) => {
-            if (key === "realtime-chatapp:chat:alice-id")
-                return ["m1.bob-id.alice-id.hi", "m2.carol-id.alice-id.yo"];
-            if (key === "realtime-chatapp:chat:bob-id") return ["m1.bob-id.alice-id.hi"];
-            return [];
-        });
         const { socket, emit } = makeSocket();
         const cb = vi.fn();
 
@@ -77,13 +64,8 @@ describe("handleRemoveFriend", () => {
 
         // single canonical row removed, order-independent
         expect(removeFriendship).toHaveBeenCalledWith("alice-id", "bob-id");
-        // alice's chat list: m1 (with bob) dropped, m2 (with carol) kept and rebuilt
-        expect(del).toHaveBeenCalledWith("realtime-chatapp:chat:alice-id");
-        expect(rPush).toHaveBeenCalledWith("realtime-chatapp:chat:alice-id", [
-            "m2.carol-id.alice-id.yo",
-        ]);
-        // bob's chat list: only the shared message -> deleted, nothing rebuilt
-        expect(del).toHaveBeenCalledWith("realtime-chatapp:chat:bob-id");
+        // the whole conversation is deleted in one atomic call (both directions)
+        expect(deleteConversation).toHaveBeenCalledWith("alice-id", "bob-id");
 
         expect(socket.to).toHaveBeenCalledWith("bob-id");
         expect(emit).toHaveBeenCalledWith("friend_removed", {

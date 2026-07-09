@@ -10,6 +10,8 @@ export const SOCKET_EVENTS = {
     CONNECT: "connect",
     CONNECTION_STATUS_CHANGED: "connection_status_changed",
     MESSAGES: "messages",
+    LOAD_OLDER: "load_older",
+    LOAD_MORE_FRIENDS: "load_more_friends",
     CONNECTION_ERROR: "connect_error",
     DIRECT_MESSAGE: "direct_message",
     FRIEND_ADDED: "friend_added",

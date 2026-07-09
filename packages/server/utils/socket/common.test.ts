@@ -6,15 +6,11 @@ vi.mock("../redis.js", () => ({
     redisClient: { hGet: (...args: unknown[]) => hGet(...args) },
 }));
 
-const { enrichWithPresence, getHashMapKey, getMessagesKey } = await import("./common.js");
+const { enrichWithPresence, getHashMapKey } = await import("./common.js");
 
 describe("redis key builders", () => {
     it("getHashMapKey namespaces by appName + username", () => {
         expect(getHashMapKey("alice")).toBe("realtime-chatapp:user_id:alice");
-    });
-
-    it("getMessagesKey namespaces by appName + user_id", () => {
-        expect(getMessagesKey("u-123")).toBe("realtime-chatapp:chat:u-123");
     });
 });
 

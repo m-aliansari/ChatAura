@@ -1,27 +1,27 @@
 # Architecture Roadmap & Decisions
 
-> **Status: direction, partly implemented.** This document records where the app is going and _why_. As of this writing, **Stages 1–2 are done**: TypeScript, then friendships + FCM tokens moved to Postgres behind Drizzle. **Messages** still live only in Redis (see "Current state" below). Do not read the later roadmap stages as descriptions of current behavior. Each stage lands as its own separate plan/PR.
+> **Status: direction, partly implemented.** This document records where the app is going and _why_. As of this writing, **Stages 1–3 are done**: TypeScript, then friendships + FCM tokens moved to Postgres behind Drizzle, then **messages moved to Postgres** (with history/pagination for both messages and the friends list, and FCM decoupled onto a Redis pub/sub event). **All durable data now lives in Postgres**; Redis is cache + presence + pub/sub only. Do not read the later roadmap stages as descriptions of current behavior. Each stage lands as its own separate plan/PR.
 
 ## Why this exists
 
-The app historically treated **Redis as its primary database**: messages and the friendship graph lived **only** in Redis as fragile dot-joined strings — `"messageId.to.from.content"` and `"username.user_id"` — pushed to two keys each with **no transactionality**. Stage 2 has since moved friendships to Postgres; **messages** remain the last misplaced slice. The original consequences that motivated this work:
+The app historically treated **Redis as its primary database**: messages and the friendship graph lived **only** in Redis as fragile dot-joined strings — `"messageId.to.from.content"` and `"username.user_id"` — pushed to two keys each with **no transactionality**. Stages 2–3 have since moved friendships **and messages** to Postgres — the Redis primary-datastore problem is now fully resolved. The original consequences that motivated this work:
 
 - A Redis flush = **permanent loss** of all messages and the entire social graph.
 - Message content containing a `.` corrupts on parse (known bug, e.g. `"3.14"`).
 - Mutual add/remove does two sequential writes with no `MULTI`, so a mid-write failure leaves the two sides inconsistent.
 
-Postgres today holds only the `users` table + an `fcm_token[]` column. The goal is to make the app professional, scalable, and eventually **microservices / Kubernetes-ready**, by putting durable data where it belongs and narrowing Redis to what it's actually good at.
+(Historically, Postgres held only the `users` table + an `fcm_token[]` column; Stages 2–3 moved FCM tokens, friendships, and messages into normalized tables.) The goal is to make the app professional, scalable, and eventually **microservices / Kubernetes-ready**, by putting durable data where it belongs and narrowing Redis to what it's actually good at.
 
 ### Current state (what's true today)
 
-| Data                                    | Home today                                              | Correct?                        |
-| --------------------------------------- | ------------------------------------------------------- | ------------------------------- |
-| Users (id, username, passhash, user_id) | Postgres                                                | ✅                              |
-| FCM tokens                              | Postgres `fcm_tokens` table + Redis cache-aside         | ✅ (normalized, Stage 2)        |
-| Presence (`connected` flag)             | Redis hash `user_id:<username>`                         | ✅ ephemeral                    |
-| Rate-limit counters                     | Redis (TTL keys)                                        | ✅ ephemeral                    |
-| **Friendships**                         | Postgres `friendships` (canonical row) + Redis presence | ✅ (Stage 2)                    |
-| **Messages**                            | **Redis only** (`chat:<user_id>` lists, dot-joined)     | ❌ → move to Postgres (Stage 3) |
+| Data                                    | Home today                                              | Correct?                 |
+| --------------------------------------- | ------------------------------------------------------- | ------------------------ |
+| Users (id, username, passhash, user_id) | Postgres                                                | ✅                       |
+| FCM tokens                              | Postgres `fcm_tokens` table + Redis cache-aside         | ✅ (normalized, Stage 2) |
+| Presence (`connected` flag)             | Redis hash `user_id:<username>`                         | ✅ ephemeral             |
+| Rate-limit counters                     | Redis (TTL keys)                                        | ✅ ephemeral             |
+| **Friendships**                         | Postgres `friendships` (canonical row) + Redis presence | ✅ (Stage 2)             |
+| **Messages**                            | Postgres `messages` (one row/message, proper columns)   | ✅ (Stage 3)             |
 
 ---
 
@@ -87,9 +87,12 @@ Adopted **Drizzle** as the single data-access layer and migration authority (`dr
 - **Data-access layout:** `db/schema.ts`, `db/index.ts` (pooled `pg` client), `db/repositories/{users,fcmTokens,friendships}.ts`. Auth queries were converted off pg-promise too → **one library, one connection pool**.
 - **New rule:** tables must be normalized; see [`DATABASE_NORMALIZATION.md`](DATABASE_NORMALIZATION.md) — a generic, project-agnostic reference used when adding tables.
 
-### Stage 3 — messages → Postgres
+### Stage 3 — messages → Postgres ✅ DONE
 
-`messages` table with proper columns (kills the dot-delimiter bug); history + pagination; rework the connect-time `MESSAGES` load. Emit a `MessageSent`-style event on send to decouple FCM (principle 4).
+A `messages` table with proper columns (surrogate `bigserial id` as the pagination cursor + a `message_id` uuid as the stable wire id; `text content` kills the dot-delimiter bug). Each send is now a **single atomic `INSERT`** (replacing the non-transactional dual `lPush`), and remove-friend is a single atomic `DELETE` of the conversation. Data-access is `db/repositories/messages.ts` (`saveMessage`, `getConversation`, `getRecentMessagesForConversations`, `deleteConversation`); the Redis `chat:<user_id>` lists are gone.
+
+- **History + pagination (both directions):** the connect-time load is now **bounded** — the first page of friends (`getFriendsPage`, stable `created_at`-desc order) plus the recent N messages for _only_ that page's conversations (replaces the unbounded `getFriends` + `lRange(0,-1)`). Two new cursor-paginated socket events drive infinite scroll: `LOAD_OLDER` (older messages within a conversation, cursored on `id`) and `LOAD_MORE_FRIENDS` (next friends page, returning that page's recent messages in the ack). Sort-the-friends-list-by-latest-message was scoped out (deferred); friends page in friendship-recency order.
+- **FCM decoupled (principle 4):** the send path no longer calls FCM inline. It publishes a `message-sent` event on a Redis pub/sub channel (`${appName}:events:message-sent`); a boot-time subscriber (`utils/events/messageSentSubscriber.ts`) consumes it and sends the push, keeping notification latency/errors off the message critical path and making the notification path the easy first service extraction (Stage 6). See the multi-instance caveat under Stage 5.
 
 ### Stage 4 — Dockerize (Compose)
 
@@ -98,6 +101,8 @@ Adopted **Drizzle** as the single data-access layer and migration authority (`dr
 ### Stage 5 — Presence rework + Socket.io Redis adapter (scaling prerequisite)
 
 Move in-memory disconnect timers + single-instance `connected` flag into shared Redis; add the Socket.io Redis pub/sub adapter so any instance/pod delivers to any user's room. Makes the realtime gateway stateless & horizontally scalable.
+
+> **Multi-instance FCM caveat (from Stage 3):** the `message-sent` Redis pub/sub is fan-out — with >1 instance, _every_ instance's subscriber receives each event and would send a **duplicate** push. Correct at a single instance today. When scaling out, give the notification consumer single-delivery semantics (a Redis **Streams consumer group**, or fold it into the extracted Notification service in Stage 6) instead of plain pub/sub.
 
 ### Stage 6 — Microservices extraction (future, not scheduled)
 

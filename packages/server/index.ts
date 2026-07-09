@@ -13,9 +13,12 @@ import { redisClient } from "./utils/redis.js";
 import { handleDirectMessage } from "./utils/socket/directMessage.js";
 import { handleSocketAddFriend } from "./utils/socket/handleSocketAddFriend.js";
 import { handleRemoveFriend } from "./utils/socket/handleRemoveFriend.js";
+import { handleLoadOlder } from "./utils/socket/loadOlder.js";
+import { handleLoadMoreFriends } from "./utils/socket/loadMoreFriends.js";
 import { initializeUser } from "./utils/socket/initializeUser.js";
 import { registerDisconnect } from "./utils/socket/registerDisconnect.js";
 import { reconcilePresence } from "./utils/socket/reconcilePresence.js";
+import { initMessageSentSubscriber } from "./utils/events/messageSentSubscriber.js";
 import { disconnectTimers } from "./constants/socket.js";
 
 // Connect Redis and clear any stale presence flags left by a previous process
@@ -25,6 +28,9 @@ import { disconnectTimers } from "./constants/socket.js";
 try {
     await redisClient.connect();
     await reconcilePresence();
+    // Start the FCM notification consumer (decoupled from the message send path). Resilient:
+    // a subscriber failure must not stop the HTTP server — the client auto-reconnects.
+    await initMessageSentSubscriber();
 } catch (error) {
     console.error("Redis startup/presence reconcile failed:", error);
 }
@@ -73,6 +79,12 @@ socketio.on("connection", async (socket) => {
     });
     socket.on(SOCKET_EVENTS.DIRECT_MESSAGE, (message, cb) => {
         handleDirectMessage(socket, message, cb);
+    });
+    socket.on(SOCKET_EVENTS.LOAD_OLDER, (payload, cb) => {
+        handleLoadOlder(socket, payload, cb);
+    });
+    socket.on(SOCKET_EVENTS.LOAD_MORE_FRIENDS, (payload, cb) => {
+        handleLoadMoreFriends(socket, payload, cb);
     });
     registerDisconnect(socketio, socket);
     socket.on(SOCKET_EVENTS.TYPING, ({ to }) => {
