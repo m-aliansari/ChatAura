@@ -169,6 +169,7 @@ export const ChatMessages = ({ onBack }) => {
                         px="1rem"
                         ref={(el) => (messagesContainerRefs.current[friend.user_id] = el)}
                         onScroll={handleScroll(friend.user_id)}
+                        data-testid={`messages-scroll:${friend.user_id}`}
                         flex="1"
                     >
                         <VStack justify="flex-start" flexDir="column-reverse" mt="auto">

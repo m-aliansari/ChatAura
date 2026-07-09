@@ -65,6 +65,15 @@ yarn workspace @realtime-chatapp/server db:studio     # open Drizzle Studio
 
 Edit the relevant `db/schema/<context>.ts` file (one per bounded context; no barrel — consumers import the specific context file directly), run `db:generate` to produce the SQL migration, then `db:migrate` to apply it. `drizzle.config.ts` reads `DATABASE_URL`; the app runtime connects via the discrete `DATABASE_*` vars in `db/index.ts`.
 
+Seeding a dev database (for exercising infinite scroll / pagination by hand):
+
+```bash
+yarn workspace @realtime-chatapp/server db:seed           # 40 friends x 60 messages, user "demo"/"secret1"
+yarn workspace @realtime-chatapp/server db:seed --reset   # TRUNCATE all tables first
+```
+
+Defaults deliberately exceed both page sizes (`FRIENDS_PAGE_SIZE=15`, `MESSAGES_PAGE_SIZE=30`) so `LOAD_MORE_FRIENDS` and `LOAD_OLDER` both trigger. Tunable via `SEED_FRIENDS` / `SEED_MESSAGES` / `SEED_USERNAME` / `SEED_PASSWORD`; refuses to run when `NODE_ENV=production`. It goes through the real `addUser` / `addFriendship` repositories (so the `user_a_id < user_b_id` canonicalization is the app's own). **Not** `drizzle-seed`: that generates each column independently and infers row-level relationships from foreign keys, which this schema has none of (soft `user_id` refs, per roadmap principle 2) — it cannot produce canonical friendship pairs or directional messages between befriended users.
+
 ### Testing
 
 Three tiers, all run from the repo root:

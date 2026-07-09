@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { screen } from "@testing-library/react";
+import { fireEvent, screen } from "@testing-library/react";
 import { Tabs } from "@chakra-ui/react";
 import { SOCKET_EVENTS } from "@realtime-chatapp/common";
 import { renderWithProviders } from "../../test/renderWithProviders.jsx";
@@ -106,5 +106,98 @@ describe("ChatMessages", () => {
         const prev = [{ id: 1, messageId: "m1", to: "bob-id", from: "me", content: "hi" }];
         // duplicate messageId -> merged list does not grow
         expect(updater(prev)).toHaveLength(1);
+    });
+});
+
+describe("ChatMessages — scroll to load older (LOAD_OLDER)", () => {
+    const messages = [
+        { id: 5, messageId: "m5", to: "bob-id", from: "me", content: "newer" },
+        { id: 3, messageId: "m3", to: "bob-id", from: "me", content: "older" },
+    ];
+
+    // jsdom reports scrollHeight/clientHeight/scrollTop as 0, so any scroll event lands at the
+    // "oldest" edge and triggers the load — exactly the condition we want to exercise.
+    function setupScroll({ conversationMeta = {}, emitImpl } = {}) {
+        const socket = { on: vi.fn(), off: vi.fn(), emit: vi.fn(emitImpl) };
+        const setMessages = vi.fn();
+        const setConversationMeta = vi.fn();
+        renderWithProviders(
+            <SocketContext.Provider value={{ socket }}>
+                <FriendsContext.Provider
+                    value={{ friendList: [{ username: "bob", user_id: "bob-id" }] }}
+                >
+                    <MessagesContext.Provider
+                        value={{ messages, setMessages, conversationMeta, setConversationMeta }}
+                    >
+                        <Tabs.Root value="bob-id">
+                            <ChatMessages />
+                        </Tabs.Root>
+                    </MessagesContext.Provider>
+                </FriendsContext.Provider>
+            </SocketContext.Provider>,
+        );
+        return { socket, setMessages, setConversationMeta };
+    }
+
+    const loadOlderCalls = (socket) =>
+        socket.emit.mock.calls.filter((c) => c[0] === SOCKET_EVENTS.LOAD_OLDER);
+
+    it("emits LOAD_OLDER cursored on the oldest loaded message and merges the reply", () => {
+        const older = [{ id: 1, messageId: "m1", to: "bob-id", from: "me", content: "oldest" }];
+        const { socket, setMessages, setConversationMeta } = setupScroll({
+            emitImpl: (event, payload, cb) => {
+                if (event === SOCKET_EVENTS.LOAD_OLDER) cb({ messages: older, hasMore: false });
+            },
+        });
+
+        fireEvent.scroll(screen.getByTestId("messages-scroll:bob-id"));
+
+        const [[, payload]] = loadOlderCalls(socket);
+        // cursor is the smallest id currently held for this conversation
+        expect(payload).toEqual({ friendUserId: "bob-id", before: 3 });
+
+        // older page merged into the flat list
+        const updater = setMessages.mock.calls.at(-1)[0];
+        expect(updater(messages).map((m) => m.id)).toEqual([5, 3, 1]);
+
+        // meta flipped to loading, then settled with the server's hasMore
+        expect(setConversationMeta).toHaveBeenCalledTimes(2);
+        expect(setConversationMeta.mock.calls.at(-1)[0]["bob-id"]).toEqual({
+            hasMore: false,
+            loading: false,
+        });
+    });
+
+    it("does not emit LOAD_OLDER once the conversation has no older messages", () => {
+        const { socket } = setupScroll({
+            conversationMeta: { "bob-id": { hasMore: false, loading: false } },
+        });
+
+        fireEvent.scroll(screen.getByTestId("messages-scroll:bob-id"));
+
+        expect(loadOlderCalls(socket)).toHaveLength(0);
+    });
+
+    it("does not emit LOAD_OLDER while a page is already in flight", () => {
+        const { socket } = setupScroll({
+            conversationMeta: { "bob-id": { hasMore: true, loading: true } },
+        });
+
+        fireEvent.scroll(screen.getByTestId("messages-scroll:bob-id"));
+
+        expect(loadOlderCalls(socket)).toHaveLength(0);
+    });
+
+    it("guards against a double-fire when scroll events arrive back-to-back", () => {
+        // The ref guard must block the second scroll before React commits `loading: true`.
+        const { socket } = setupScroll({
+            emitImpl: () => {}, // never acks -> stays in flight
+        });
+
+        const el = screen.getByTestId("messages-scroll:bob-id");
+        fireEvent.scroll(el);
+        fireEvent.scroll(el);
+
+        expect(loadOlderCalls(socket)).toHaveLength(1);
     });
 });

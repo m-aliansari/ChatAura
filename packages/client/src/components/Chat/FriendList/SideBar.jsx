@@ -74,6 +74,7 @@ export const SideBar = () => {
                         maxH="82vh"
                         overflowY="auto"
                         onScroll={handleScroll}
+                        data-testid="friends-scroll"
                         backgroundImage={{
                             base: "linear-gradient(to right, #f5f5f5, #e0e0e0)", // light gray gradient for light mode
                             _dark: "linear-gradient(to right, #131313ff, #4a4a4a)", // dark gray gradient for dark mode

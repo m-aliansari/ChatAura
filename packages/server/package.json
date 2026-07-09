@@ -32,6 +32,7 @@
         "coverage:merge": "node scripts/merge-coverage.mjs",
         "db:generate": "drizzle-kit generate",
         "db:migrate": "drizzle-kit migrate",
+        "db:seed": "tsx scripts/seed.ts",
         "db:push": "drizzle-kit push",
         "db:studio": "drizzle-kit studio"
     },
