@@ -16,6 +16,7 @@ import { ChatBox } from "./ChatBox.jsx";
 import { SOCKET_EVENTS } from "@realtime-chatapp/common";
 import { keyframes } from "@emotion/react";
 import { SocketContext } from "../../contexts/Socket/SocketContext.js";
+import { ScrollLoader } from "../common/ScrollLoader.jsx";
 import { mergeMessages } from "../../utils/mergeMessages.js";
 
 const dotPulse = keyframes(`
@@ -90,7 +91,7 @@ export const ChatMessages = ({ onBack }) => {
 
     // Fetch the previous page of a conversation when the user scrolls to the oldest message.
     const loadOlder = (friendUserId) => {
-        const meta = conversationMetaRef.current[friendUserId] ?? {
+        const meta = conversationMetaRef.current?.[friendUserId] ?? {
             hasMore: true,
             loading: false,
         };
@@ -239,6 +240,11 @@ export const ChatMessages = ({ onBack }) => {
                                         {message.content}
                                     </Text>
                                 ))}
+                            {/* Last child of a column-reverse stack renders at the visual TOP —
+                                i.e. above the oldest message, where the next page loads in. */}
+                            {conversationMeta?.[friend.user_id]?.loading && (
+                                <ScrollLoader label="Loading older messages…" />
+                            )}
                         </VStack>
                     </Box>
 

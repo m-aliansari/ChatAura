@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { fireEvent, screen } from "@testing-library/react";
+import { cleanup, fireEvent, screen } from "@testing-library/react";
 import { Tabs } from "@chakra-ui/react";
 import { SOCKET_EVENTS } from "@realtime-chatapp/common";
 import { renderWithProviders } from "../../../test/renderWithProviders.jsx";
@@ -133,5 +133,18 @@ describe("SideBar — friends infinite scroll (LOAD_MORE_FRIENDS)", () => {
         fireEvent.scroll(el);
 
         expect(loadMoreCalls(socket)).toHaveLength(1);
+    });
+
+    it("shows an accessible loading indicator only while a page is in flight", () => {
+        setup({ friendsMeta: { cursor, hasMore: true, loading: false } });
+        expect(screen.queryByRole("status")).not.toBeInTheDocument();
+        cleanup();
+
+        setup({ friendsMeta: { cursor, hasMore: true, loading: true } });
+        const status = screen.getByRole("status");
+        expect(status).toHaveTextContent("Loading more friends");
+        // announced politely, and never nested inside the tablist
+        expect(status).toHaveAttribute("aria-live", "polite");
+        expect(screen.getByTestId("friends-scroll")).not.toContainElement(status);
     });
 });

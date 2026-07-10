@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { act, fireEvent, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen } from "@testing-library/react";
 import { Tabs } from "@chakra-ui/react";
 import { SOCKET_EVENTS } from "@realtime-chatapp/common";
 import { renderWithProviders } from "../../test/renderWithProviders.jsx";
@@ -272,5 +272,16 @@ describe("ChatMessages — scroll to load older (LOAD_OLDER)", () => {
         fireEvent.scroll(el);
 
         expect(loadOlderCalls(socket)).toHaveLength(1);
+    });
+
+    it("shows an accessible loading indicator only while an older page is in flight", () => {
+        setupScroll({ conversationMeta: { "bob-id": { hasMore: true, loading: false } } });
+        expect(screen.queryByRole("status")).not.toBeInTheDocument();
+        cleanup();
+
+        setupScroll({ conversationMeta: { "bob-id": { hasMore: true, loading: true } } });
+        const status = screen.getByRole("status");
+        expect(status).toHaveTextContent("Loading older messages");
+        expect(status).toHaveAttribute("aria-live", "polite");
     });
 });
