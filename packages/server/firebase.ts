@@ -1,28 +1,30 @@
 import admin from "firebase-admin";
-import { createRequire } from "module";
 import type { ServiceAccount } from "firebase-admin";
 
 /**
- * Credentials come from the environment first so the gitignored service-account.json never
- * has to be baked into a container image layer: a deployment injects
- * FIREBASE_SERVICE_ACCOUNT_JSON from a secret store (ECS Secrets Manager, k8s Secret, …).
- * Accepts raw JSON or base64 — most secret stores and CI UIs mangle multi-line values, and
- * the private key in a service account is multi-line.
+ * The service account comes from the environment, never from a file on disk: a credential in
+ * the working tree is one `git add -f` away from being published, and a container image must
+ * not carry one in a layer. Every environment injects FIREBASE_SERVICE_ACCOUNT_JSON from a
+ * secret store instead (Render env var, ECS Secrets Manager, k8s Secret, …).
  *
- * The on-disk file remains the local-dev path, so `yarn dev:server` is unchanged.
+ * Accepts raw JSON or base64. A service account's private key is multi-line, which `.env`
+ * files and many secret UIs mangle; base64 collapses it to one safe line.
  */
 function loadServiceAccount(): ServiceAccount {
     const fromEnv = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
 
-    if (fromEnv) {
-        const json = fromEnv.trimStart().startsWith("{")
-            ? fromEnv
-            : Buffer.from(fromEnv, "base64").toString("utf8");
-        return JSON.parse(json) as ServiceAccount;
+    if (!fromEnv) {
+        throw new Error(
+            "FIREBASE_SERVICE_ACCOUNT_JSON is not set. Provide the Firebase service account " +
+                "(raw JSON or base64), or set DISABLE_FCM=true to run without push notifications.",
+        );
     }
 
-    const require = createRequire(import.meta.url);
-    return require("./service-account.json") as ServiceAccount;
+    const json = fromEnv.trimStart().startsWith("{")
+        ? fromEnv
+        : Buffer.from(fromEnv, "base64").toString("utf8");
+
+    return JSON.parse(json) as ServiceAccount;
 }
 
 let firebaseAdmin: typeof admin;
