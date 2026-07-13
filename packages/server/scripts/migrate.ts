@@ -4,6 +4,7 @@ import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { Pool } from "pg";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import path from "node:path";
+import { resolvePgSsl } from "../db/ssl.js";
 
 // Resolve relative to this file (packages/server/scripts/) so it works regardless of the
 // process cwd — vitest runs from the package, Playwright from the client, the container
@@ -18,7 +19,7 @@ const migrationsFolder = path.resolve(fileURLToPath(new URL(".", import.meta.url
  *  is a devDependency, so it does not exist in a production image. This needs only
  *  drizzle-orm + pg + tsx, all of which are runtime dependencies. */
 export async function runMigrations(connectionUri: string) {
-    const pool = new Pool({ connectionString: connectionUri });
+    const pool = new Pool({ connectionString: connectionUri, ssl: resolvePgSsl() });
     const db = drizzle(pool);
     try {
         await migrate(db, { migrationsFolder });
