@@ -9,3 +9,14 @@ variable "project" {
   description = "Name prefix and Project tag for all resources."
   default     = "chataura-app"
 }
+
+variable "image_tag" {
+  type        = string
+  description = "Tag of the image built by docker"
+}
+
+variable "client_base_url" {
+  type        = string
+  description = "The origin of the client"
+  default     = "http://localhost:5173"
+}
