@@ -9,7 +9,7 @@ import type { RedisClientOptions } from "redis";
  * Precedence: REDIS_URL (Compose, ElastiCache, most managed providers) → the discrete
  * REDIS_* vars (the existing Render deploy) → a local default for bare `yarn dev:server`.
  */
-function resolveRedisOptions(): RedisClientOptions {
+export function resolveRedisOptions(): RedisClientOptions {
     if (process.env.REDIS_URL) {
         return { url: process.env.REDIS_URL };
     }
