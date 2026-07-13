@@ -1,0 +1,90 @@
+# Local backend stack: server + Postgres + Redis.
+#
+# The client is NOT containerized — it is a static Vite build published to a CDN
+# (Netlify). Run it separately with `yarn dev:client` and point it at this server:
+#   VITE_API_BASE_URL=http://localhost:4000
+#
+# Postgres and Redis are pinned to the same images the Testcontainers suites use
+# (test/integration/globalSetup.ts, test/e2e/server.mjs) so local, CI and test all agree.
+
+name: realtime-chatapp
+
+x-database-env: &database-env
+    DATABASE_HOST: postgres
+    DATABASE_PORT: "5432"
+    DATABASE_USER: ${DATABASE_USER:-chatapp}
+    DATABASE_PASSWORD: ${DATABASE_PASSWORD:-chatapp}
+    DATABASE_NAME: ${DATABASE_NAME:-chatapp}
+
+services:
+    postgres:
+        image: postgres:16-alpine
+        environment:
+            POSTGRES_USER: ${DATABASE_USER:-chatapp}
+            POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-chatapp}
+            POSTGRES_DB: ${DATABASE_NAME:-chatapp}
+        ports:
+            - "${DATABASE_PORT:-5432}:5432"
+        volumes:
+            - pgdata:/var/lib/postgresql/data
+        healthcheck:
+            test:
+                [
+                    "CMD-SHELL",
+                    "pg_isready -U ${DATABASE_USER:-chatapp} -d ${DATABASE_NAME:-chatapp}",
+                ]
+            interval: 5s
+            timeout: 5s
+            retries: 10
+
+    redis:
+        image: redis:7-alpine
+        ports:
+            - "${REDIS_PORT:-6379}:6379"
+        healthcheck:
+            test: ["CMD", "redis-cli", "ping"]
+            interval: 5s
+            timeout: 5s
+            retries: 10
+
+    # One-shot: applies Drizzle migrations, then exits. `server` waits for it to succeed.
+    # This is the Compose stand-in for a one-off ECS task / Kubernetes Job.
+    migrate:
+        image: realtime-chatapp-server:${IMAGE_TAG:-dev}
+        build: .
+        command: ["node", "--import", "tsx", "packages/server/scripts/migrate.ts"]
+        environment: *database-env
+        depends_on:
+            postgres:
+                condition: service_healthy
+        restart: "no"
+
+    server:
+        image: realtime-chatapp-server:${IMAGE_TAG:-dev}
+        build: .
+        ports:
+            - "${PORT:-4000}:4000"
+        environment:
+            <<: *database-env
+            PORT: "4000"
+            # Prod-shaped CORS: exactly one allowed origin. Point this at wherever you run
+            # the client (`yarn dev:client` serves 5173).
+            NODE_ENV: production
+            CLIENT_BASE_URL: ${CLIENT_BASE_URL:-http://localhost:5173}
+            REDIS_URL: redis://redis:6379
+            JWT_SECRET: ${JWT_SECRET:-dev-secret-change-me}
+            # Push notifications need the gitignored service account, which is deliberately
+            # never baked into the image. Set DISABLE_FCM=false and supply
+            # FIREBASE_SERVICE_ACCOUNT_JSON (raw or base64) to exercise FCM locally.
+            DISABLE_FCM: ${DISABLE_FCM:-true}
+            FIREBASE_SERVICE_ACCOUNT_JSON: ${FIREBASE_SERVICE_ACCOUNT_JSON:-}
+        depends_on:
+            postgres:
+                condition: service_healthy
+            redis:
+                condition: service_healthy
+            migrate:
+                condition: service_completed_successfully
+
+volumes:
+    pgdata:

@@ -13,12 +13,7 @@ process.env.DATABASE_USER = pg.user;
 process.env.DATABASE_PASSWORD = pg.password;
 process.env.DATABASE_PORT = String(pg.port);
 
-// redis.js only honours REDIS_SOCKET_HOST/PORT on the production branch.
-process.env.NODE_ENV = "production";
-process.env.REDIS_SOCKET_HOST = redis.host;
-process.env.REDIS_SOCKET_PORT = String(redis.port);
-delete process.env.REDIS_USERNAME;
-delete process.env.REDIS_PASSWORD;
+process.env.REDIS_URL = `redis://${redis.host}:${redis.port}`;
 
 process.env.JWT_SECRET = "test-secret-key";
 

@@ -1,6 +1,6 @@
 # Architecture Roadmap & Decisions
 
-> **Status: direction, partly implemented.** This document records where the app is going and _why_. As of this writing, **Stages 1–3 are done**: TypeScript, then friendships + FCM tokens moved to Postgres behind Drizzle, then **messages moved to Postgres** (with history/pagination for both messages and the friends list, and FCM decoupled onto a Redis pub/sub event). **All durable data now lives in Postgres**; Redis is cache + presence + pub/sub only. Do not read the later roadmap stages as descriptions of current behavior. Each stage lands as its own separate plan/PR.
+> **Status: direction, partly implemented.** This document records where the app is going and _why_. As of this writing, **Stages 1–3 are done** — TypeScript, then friendships + FCM tokens moved to Postgres behind Drizzle, then **messages moved to Postgres** (with history/pagination for both messages and the friends list, and FCM decoupled onto a Redis pub/sub event) — and **Stage 4a (the container image + Compose stack) is done**, with the AWS deployment (4b/4c) in progress. **All durable data now lives in Postgres**; Redis is cache + presence + pub/sub only. Do not read the later roadmap stages as descriptions of current behavior. Each stage lands as its own separate plan/PR.
 
 ## Why this exists
 
@@ -94,9 +94,21 @@ A `messages` table with proper columns (surrogate `bigserial id` as the paginati
 - **History + pagination (both directions):** the connect-time load is now **bounded** — the first page of friends (`getFriendsPage`, stable `created_at`-desc order) plus the recent N messages for _only_ that page's conversations (replaces the unbounded `getFriends` + `lRange(0,-1)`). Two new cursor-paginated socket events drive infinite scroll: `LOAD_OLDER` (older messages within a conversation, cursored on `id`) and `LOAD_MORE_FRIENDS` (next friends page, returning that page's recent messages in the ack). Sort-the-friends-list-by-latest-message was scoped out (deferred); friends page in friendship-recency order.
 - **FCM decoupled (principle 4):** the send path no longer calls FCM inline. It publishes a `message-sent` event on a Redis pub/sub channel (`${appName}:events:message-sent`); a boot-time subscriber (`utils/events/messageSentSubscriber.ts`) consumes it and sends the push, keeping notification latency/errors off the message critical path and making the notification path the easy first service extraction (Stage 6). See the multi-instance caveat under Stage 5.
 
-### Stage 4 — Dockerize (Compose)
+### Stage 4 — Dockerize (Compose) ✅ DONE (4a); AWS deploy (4b/4c) in progress
 
-`docker-compose`: backend + Postgres + Redis; static frontend via Netlify/CDN. On-ramp to k8s; maps ~1:1 to future manifests.
+**4a — the image + Compose stack (done).** A root `Dockerfile` (multi-stage, `node:22-bookworm-slim`, Corepack-pinned Yarn 4, `yarn workspaces focus --production`, non-root) and a `docker-compose.yml` with backend + `postgres:16-alpine` + `redis:7-alpine` + a **one-shot `migrate` service** — the Compose stand-in for a k8s Job / one-off ECS task. The frontend stays a static CDN build (Netlify); it is deliberately **not** containerized. CI gained a `docker` job that builds the image and smoke-tests the whole stack against `/health`.
+
+**No compile step:** `common` is consumed as raw TS and the server runs under `tsx` (a runtime dep), so the image ships `.ts` sources — matching the Render deploy. This resolves the "compiled artifacts deferred to Stage 4" question from Stage 1 **in favour of staying on `tsx`**; revisit only if image size or cold start ever justifies it.
+
+Five latent blockers had to be fixed to make the app containerizable at all — each was a bug that only a container (or a load balancer) exposes:
+
+1. **No health endpoint existed.** Added `GET /health` (liveness only, no DB round-trip). An ALB/k8s probe kills a task that cannot answer one, so this is a hard prerequisite for 4b, not a nicety.
+2. **`PORT` had no default** — `server.listen(undefined)` bound a _random_ port.
+3. **Redis transport was keyed off `NODE_ENV`**, so any non-production process fell back to `redis://localhost:6379` — which _inside a container is the container itself_. Replaced with an explicit **`REDIS_URL`** (→ discrete `REDIS_*` → local default). `NODE_ENV` now means only what it should: CORS strictness. Both test harnesses previously forced `NODE_ENV=production` purely to reach Redis; that hack is gone.
+4. **Migrations only ran via `drizzle-kit`**, a devDependency absent from a production image. The programmatic migrator was promoted from `test/runMigrations.ts` to a first-class **`scripts/migrate.ts`** (needs only `drizzle-orm` + `pg` + `tsx`, all runtime deps) and is now shared by Compose, both test harnesses, and — in 4b — a one-off ECS task.
+5. **`firebase.ts` `require`d the gitignored `service-account.json` at import time.** It now prefers **`FIREBASE_SERVICE_ACCOUNT_JSON`** (raw or base64) from a secret store, keeping the file as the local-dev fallback. The file is `.dockerignore`d and must never enter an image layer.
+
+**4b/4c — AWS deployment (see [`AWS_DEPLOYMENT.md`](AWS_DEPLOYMENT.md)).** The same image on **ECR + ECS Fargate + RDS Postgres + ElastiCache Redis**, first by hand (to learn the console), then as committed **Terraform** under `infra/` so anyone cloning the repo can `terraform apply`. Deliberately **no NAT Gateway** (~$32/mo for nothing): Fargate tasks run in public subnets with `assignPublicIp`. The ALB needs **session stickiness**, because Socket.io's long-polling upgrade handshake must hit the same backend twice — which is precisely the constraint **Stage 5's Redis adapter removes**, and the most instructive thing in the whole exercise.
 
 ### Stage 5 — Presence rework + Socket.io Redis adapter (scaling prerequisite)
 
