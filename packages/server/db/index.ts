@@ -1,5 +1,6 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
+import { resolvePgSsl } from "./ssl.js";
 
 // Single pooled Postgres connection for the whole app (replaces the former pg-promise
 // pool). Built from the discrete DATABASE_* env vars so no runtime env change is needed.
@@ -10,6 +11,7 @@ const pool = new Pool({
     user: process.env.DATABASE_USER,
     password: process.env.DATABASE_PASSWORD,
     database: process.env.DATABASE_NAME,
+    ssl: resolvePgSsl(),
 });
 
 // No `schema` passed: the client is intentionally table-agnostic (a pure connection). We use
