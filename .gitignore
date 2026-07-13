@@ -68,3 +68,8 @@ PROJECT_OVERVIEW.md
 
 # Local dev / working artifacts (not shared)
 docs/superpowers/
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
