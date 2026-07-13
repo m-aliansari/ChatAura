@@ -48,4 +48,5 @@ export const API_ROUTES = {
         },
     },
     HOME: "/home",
+    HEALTH: "/health",
 } as const;

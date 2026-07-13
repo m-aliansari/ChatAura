@@ -43,6 +43,7 @@ playwright-report/
 playwright/.cache/
 playwright/.auth/
 blob-report/
+.playwright-mcp/
 
 .history
 

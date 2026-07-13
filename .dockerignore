@@ -1,0 +1,28 @@
+# Secrets — must never enter a build context, let alone an image layer.
+**/.env
+**/.env.*
+!**/.env.example
+**/service-account.json
+
+# Installed/derived artifacts: the image resolves its own from the lockfile.
+**/node_modules
+**/dist
+.yarn/cache
+.yarn/unplugged
+.yarn/install-state.gz
+.pnp.*
+
+# Test + tooling output
+**/coverage
+**/test-results
+**/playwright-report
+**/blob-report
+**/.vite
+
+# Repo metadata irrelevant to the runtime
+.git
+.github
+.husky
+.history
+**/*.md
+!README.md

@@ -1,7 +1,7 @@
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
 import { RedisContainer } from "@testcontainers/redis";
 import type { ProvidedContext } from "vitest";
-import { runMigrations } from "../runMigrations.js";
+import { runMigrations } from "../../scripts/migrate.js";
 
 type Provide = <K extends keyof ProvidedContext>(key: K, value: ProvidedContext[K]) => void;
 

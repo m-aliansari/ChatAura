@@ -5,6 +5,7 @@ import { Server } from "socket.io";
 import cors from "cors";
 import fcmRouter from "./routers/fcmRouter.js";
 import authRouter from "./routers/authRouter.js";
+import healthRouter from "./routers/healthRouter.js";
 import http from "http";
 import { corsConfig } from "./constants/cors.js";
 import { authorizeUser } from "./middlewares/socket/authorizeUser.js";
@@ -48,6 +49,7 @@ app.use(cors(corsConfig));
 app.use(json());
 
 // routers
+app.use(API_ROUTES.HEALTH, healthRouter);
 app.use(API_ROUTES.AUTH.BASE, authRouter);
 app.use(API_ROUTES.FCM.BASE, fcmRouter);
 app.set("trust proxy", 1);
@@ -100,7 +102,7 @@ socketio.on("connection", async (socket) => {
     });
 });
 
-const PORT = process.env.PORT;
+const PORT = Number(process.env.PORT ?? 4000);
 server.listen(PORT, () => {
-    console.log("Server listening on port 4000");
+    console.log(`Server listening on port ${PORT}`);
 });

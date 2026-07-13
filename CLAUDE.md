@@ -49,6 +49,17 @@ yarn start           # tsx server (production entry)
 yarn typecheck       # tsc --noEmit for common + server (CI gate; tsx does NOT type-check)
 ```
 
+Docker (Stage 4a — the backend stack; the client is **not** containerized, it stays a static CDN build):
+
+```bash
+docker compose up -d --wait   # server + postgres:16-alpine + redis:7-alpine + one-shot migrate
+docker compose down -v        # tear down, including the pgdata volume
+```
+
+The image is built from the **repo root** (`Dockerfile`), never from `packages/server` — the server imports `@realtime-chatapp/common` as a workspace, so the build context needs both packages plus the root lockfile. There is **no compile step**: `common` is raw TS and the server runs under `tsx` (a runtime dep), so the image ships `.ts` sources. Do not add a `tsc` build without also changing Render, which deploys the same way.
+
+⚠️ Compose publishes the server on **:4000**, which is also the port Playwright's E2E harness wants. Run `docker compose down` before `yarn test:e2e`, or set `PORT` for the Compose stack.
+
 Client lint (no root script — run in the package):
 
 ```bash
@@ -65,6 +76,8 @@ yarn workspace @realtime-chatapp/server db:studio     # open Drizzle Studio
 ```
 
 Edit the relevant `db/schema/<context>.ts` file (one per bounded context; no barrel — consumers import the specific context file directly), run `db:generate` to produce the SQL migration, then `db:migrate` to apply it. `drizzle.config.ts` reads `DATABASE_URL`; the app runtime connects via the discrete `DATABASE_*` vars in `db/index.ts`.
+
+**Applying** migrations in a deployed environment goes through `scripts/migrate.ts` (`yarn workspace @realtime-chatapp/server migrate`), **not** `drizzle-kit migrate`: `drizzle-kit` is a devDependency and does not exist in a production image, whereas `scripts/migrate.ts` uses only runtime deps (`drizzle-orm` + `pg` + `tsx`). It exports `runMigrations(uri)` **and** doubles as a CLI entrypoint, so the Compose `migrate` service, both test harnesses, and a future one-off ECS task / k8s Job all build the identical schema from one module. Generating migrations stays with `drizzle-kit`.
 
 Seeding a dev database (for exercising infinite scroll / pagination by hand):
 
@@ -131,7 +144,7 @@ Messages live in the Postgres `messages` table (Stage 3) — the old Redis dot-j
 
 ### FCM push notifications (decoupled)
 
-FCM is **decoupled from the send path** (roadmap principle 4): `directMessage` publishes a `message-sent` event to the Redis channel `${appName}:events:message-sent` instead of calling FCM inline. A boot-time subscriber (`utils/events/messageSentSubscriber.ts`, started from `index.ts` on a duplicated Redis connection) consumes it and sends the push via `firebase-admin` (`utils/fcm.js`, initialized in `firebase.js`; requires the gitignored `packages/server/service-account.json`). ⚠️ The pub/sub is fan-out — at **>1 instance** every subscriber fires, duplicating notifications; single-instance only until the Stage 5/6 single-consumer rework. Tokens are persisted in the Postgres `fcm_tokens` table (one row per `(user_id, token)`) and cached in Redis as a JSON `string[]`; `fcm_tokens` has **no FK** to `users`, so an authenticated token-save succeeds even for a since-deleted user (the JWT is the gate). The client registers a service worker (`packages/client/public/firebase-messaging-sw.js`) and posts `OPEN_CHAT` messages back to the app to deep-link into a conversation.
+FCM is **decoupled from the send path** (roadmap principle 4): `directMessage` publishes a `message-sent` event to the Redis channel `${appName}:events:message-sent` instead of calling FCM inline. A boot-time subscriber (`utils/events/messageSentSubscriber.ts`, started from `index.ts` on a duplicated Redis connection) consumes it and sends the push via `firebase-admin` (`utils/fcm.js`, initialized in `firebase.js`, which takes credentials from `FIREBASE_SERVICE_ACCOUNT_JSON` or falls back to the gitignored `packages/server/service-account.json`). ⚠️ The pub/sub is fan-out — at **>1 instance** every subscriber fires, duplicating notifications; single-instance only until the Stage 5/6 single-consumer rework. Tokens are persisted in the Postgres `fcm_tokens` table (one row per `(user_id, token)`) and cached in Redis as a JSON `string[]`; `fcm_tokens` has **no FK** to `users`, so an authenticated token-save succeeds even for a since-deleted user (the JWT is the gate). The client registers a service worker (`packages/client/public/firebase-messaging-sw.js`) and posts `OPEN_CHAT` messages back to the app to deep-link into a conversation.
 
 ### Client structure
 
@@ -143,7 +156,11 @@ FCM is **decoupled from the send path** (roadmap principle 4): `directMessage` p
 
 ## Environment variables
 
-Server (`packages/server/.env`): `PORT`, `JWT_SECRET`, `NODE_ENV`, `DATABASE_{NAME,HOST,USER,PASSWORD,PORT}`, `REDIS_{USERNAME,PASSWORD,SOCKET_HOST,SOCKET_PORT}` (remote Redis used only when `NODE_ENV=production`), `CLIENT_BASE_URL` / `CLIENT_BASE_URL_DEV`.
+Server (`packages/server/.env`): `PORT` (defaults to 4000), `JWT_SECRET` (fails fast at boot if unset), `NODE_ENV`, `DATABASE_{NAME,HOST,USER,PASSWORD,PORT}`, `CLIENT_BASE_URL` / `CLIENT_BASE_URL_DEV`.
+
+- **Redis: `REDIS_URL`** is preferred (Compose, ElastiCache, most managed providers); it falls back to the discrete `REDIS_{USERNAME,PASSWORD,SOCKET_HOST,SOCKET_PORT}` (what the Render deploy sets), then to a local default. Redis config is **not** keyed off `NODE_ENV` — it used to be, which meant any non-production process silently pointed at `redis://localhost:6379`, i.e. _the container itself_ when containerized. `NODE_ENV` now only controls CORS strictness (`constants/cors.ts`) and the seed guard.
+- **FCM: `FIREBASE_SERVICE_ACCOUNT_JSON`** (raw or base64) is preferred over the gitignored `packages/server/service-account.json`, so no image layer or repo ever contains the credential; the file remains the local-dev fallback. `DISABLE_FCM=true` stubs FCM out entirely (used by Compose, CI and E2E).
+- `DATABASE_URL` is used **only** by `drizzle-kit` (migration generation) and as an optional override for `scripts/migrate.ts`; the app runtime connects via the discrete `DATABASE_*` vars.
 
 Client (Vite, `VITE_` prefix required): `VITE_API_BASE_URL`, `VITE_FIREBASE_VAPID_KEY`.
 
@@ -158,7 +175,7 @@ Client (Vite, `VITE_` prefix required): `VITE_API_BASE_URL`, `VITE_FIREBASE_VAPI
 
 ## CI & Deployment
 
-CI (`.github/workflows/ci.yml`) runs lint + **typecheck** (both in the `lint` job) + all three test tiers on every PR and push to `master`. The two production deploys are **both gated on that CI passing**, but by different mechanisms:
+CI (`.github/workflows/ci.yml`) runs lint + **typecheck** (both in the `lint` job) + all three test tiers + a **`docker` job** (builds the image, boots the full Compose stack, asserts `/health`) on every PR and push to `master`. The two production deploys are **both gated on that CI passing**, but by different mechanisms:
 
 - **Client → Netlify** (static). The client build **bundles `@realtime-chatapp/common` in at build time**, so Netlify has no runtime dependency on the workspace. `packages/client/netlify.toml` carries an `ignore` command that **builds only Deploy Previews** (PRs: `PULL_REQUEST=true`) and cancels production/branch builds; the live site is published by a GitHub Actions **build hook** (`NETLIFY_BUILD_HOOK` secret) that fires only after CI is green. Build-hook builds bypass the ignore command, so the gated production deploy still works. Do not enable Netlify's "Stopped builds" toggle — it also disables build hooks.
 - **Server → Render** (Node, **not bundled**). The server resolves `@realtime-chatapp/common` from `node_modules` **at runtime**, and that package is not published to npm — it exists only as a workspace. So Render **must install from the repo root**: Root Directory is blank, Build Command is `corepack enable && yarn` (Yarn 4 workspace install that symlinks `common` and hoists `yup`), Start Command is `yarn start` (which now runs `tsx index.ts` — `tsx` is a server runtime dependency, and `common` is imported as TS source that `tsx` transpiles at runtime, so there is still no build step and **these deploy commands are unchanged by the TypeScript migration**). If Root Directory were set to `packages/server`, the isolated install would fail to find `common@1.0.0`. Render's **Auto-Deploy = "After CI Checks Pass"** provides the gate natively (no deploy hook needed). DB migrations are **not** auto-applied on deploy — add `yarn workspace @realtime-chatapp/server db:migrate` (Drizzle Kit) to Render's Pre-Deploy command if/when migrations must run before boot.
