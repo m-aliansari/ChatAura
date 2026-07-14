@@ -8,7 +8,7 @@ The stack is designed to be **ephemeral**: `terraform apply` builds the entire t
 
 ## Prerequisites
 
-- Terraform ≥ 1.9, Docker, and the AWS CLI configured with credentials (`aws sts get-caller-identity` should work)
+- Terraform ≥ 1.10 (for S3-native state locking), Docker, and the AWS CLI configured with credentials (`aws sts get-caller-identity` should work)
 - A Firebase service account JSON, **only if** you want push notifications (see step 3)
 
 ## Two stacks, split by lifecycle
@@ -33,7 +33,9 @@ Within `infra/` it is one flat root module. Terraform reads every `.tf` in the d
 | `ecs.tf`      | Cluster, server task definition, service, migration task definition |
 | `data.tf`     | Lookups of the registry and secrets that `bootstrap/` owns          |
 
-State is local (`terraform.tfstate`) and gitignored. **It contains the generated database password in plaintext** — treat the file as a credential. That is also why the JWT and Firebase values are _not_ managed by Terraform (step 3).
+The app stack's state lives in **S3** — versioned (a corrupted write can be rolled back), encrypted at rest, and locked on write via S3 conditional writes (`use_lockfile`; the DynamoDB table that older guides describe is obsolete since Terraform 1.10). `bootstrap/` keeps **local** state permanently and by necessity: a bucket cannot store the state of the stack that creates it.
+
+State matters because **it contains the generated database password in plaintext** — Terraform generated that password, so it cannot hide it from itself. Treat state as a credential. It is also precisely why the JWT and Firebase values are _not_ managed by Terraform (step 3): those it never needs to see.
 
 ## Deploy
 
