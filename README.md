@@ -160,7 +160,9 @@ Three tiers, run from the repo root (integration and E2E need Docker):
 | `yarn test:all`         | All of the above, in sequence                                           |
 | `yarn coverage:server`  | Merged unit + integration coverage report for the server                |
 
-CI (GitHub Actions) runs lint, a `tsc --noEmit` typecheck, all three test tiers, and a Docker job that builds the image and smoke-tests the full Compose stack — on every pull request and push to `master`. Both production deploys are gated on a green pipeline.
+CI (GitHub Actions) runs lint, a `tsc --noEmit` typecheck, all three test tiers, a Docker job that builds the image and smoke-tests the full Compose stack, and a Terraform job (`fmt -check` + `validate`) — on every pull request and push to `master`. Both production deploys are gated on a green pipeline.
+
+The Terraform job needs **no AWS credentials and provisions nothing**: it initializes with `-backend=false` and never runs `plan` or `apply`. It is the Terraform equivalent of `tsc --noEmit` — it catches typos, bad references and missing arguments, and it cannot tell you whether a region name or an engine version is real. Only an `apply` can.
 
 ## Deployment
 

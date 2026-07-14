@@ -132,6 +132,8 @@ Four decisions worth carrying forward:
 - **Secrets are split by who generates them.** The RDS password is a `random_password` Terraform writes to Secrets Manager — and therefore sits in plaintext in state, which is exactly why state is encrypted, versioned, and never committed. The JWT and Firebase values are created as _empty_ containers and filled out-of-band, so those credentials never enter state at all. The price is honest: `terraform apply` alone does not produce a working stack.
 - **The IAM split is the security story.** The _execution_ role (assumed by the ECS agent: pull image, write logs, resolve secrets) can read exactly three secret ARNs — not `*`. The _task_ role (assumed by application code) has no policies at all, because the app talks to Postgres and Redis, not AWS. An empty role states that deliberately; omitting it would just be silence.
 
+CI gained a **`terraform` job** (`fmt -check` + `validate` on both root modules) with **no AWS credentials**, `-backend=false`, and no `plan`/`apply` — a syntax gate, the Terraform counterpart of `tsc --noEmit`. Worth being precise about its limits: it caught nothing that an `apply` wouldn't, because the errors it _cannot_ see are the semantic ones (a mistyped region, a nonexistent engine version, a hyphen in an RDS master username — all of which `validate` accepts happily and AWS rejects minutes later). It gates typos, not correctness.
+
 Docs: [`infra/README.md`](../infra/README.md) — written as a **deployment guide for a reader**, not a diary.
 
 ### Stage 5 — Presence rework + Socket.io Redis adapter (scaling prerequisite)

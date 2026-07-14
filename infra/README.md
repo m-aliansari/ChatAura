@@ -161,6 +161,12 @@ aws rds describe-db-instances
 aws elasticache describe-replication-groups
 ```
 
+## CI
+
+The `terraform` job in `.github/workflows/ci.yml` runs `terraform fmt -check -recursive` and `terraform validate` against **both** root modules on every pull request. It has **no AWS credentials**, initializes with `-backend=false`, and never runs `plan` or `apply` — nothing is read from AWS and nothing is provisioned.
+
+Be clear about what that does and does not buy you. `validate` checks syntax, types, references and required arguments — it is the Terraform counterpart of `tsc --noEmit`. It has no idea whether `us-east-1` is a real region, whether `postgres` version `16` exists, or whether an RDS master username may contain a hyphen (it may not). **Those only fail at apply.** A green CI means the configuration is well-formed, not that it works.
+
 ## Design notes
 
 Decisions here that look wrong until you know why:

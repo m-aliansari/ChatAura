@@ -135,6 +135,38 @@ jobs:
               if: ${{ always() }}
               run: docker compose down -v
 
+    # Syntax gate for the Terraform under infra/. Deliberately NO credentials and
+    # NO `plan` — nothing is provisioned, nothing is read from AWS. `validate`
+    # checks references, types and required arguments; it cannot know whether a
+    # region, an engine version or an RDS username is *real* (that only fails at
+    # apply), so treat this as the terraform equivalent of `tsc --noEmit`, not as
+    # proof the stack works.
+    terraform:
+        name: Terraform fmt & validate
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - uses: hashicorp/setup-terraform@v3
+              with:
+                  # Matches required_version: S3-native state locking needs 1.10+.
+                  terraform_version: 1.10.0
+                  # The wrapper rewrites stdout and breaks nothing here, but it also
+                  # masks non-zero exits in some steps; we want raw exit codes.
+                  terraform_wrapper: false
+            # -recursive covers both root modules (infra/ and infra/bootstrap/).
+            - name: Format check
+              run: terraform fmt -check -recursive infra
+            # -backend=false: init the providers without touching the S3 backend,
+            # which would need AWS credentials. Each root module validates alone.
+            - name: Validate app stack
+              run: |
+                  terraform -chdir=infra init -backend=false -input=false
+                  terraform -chdir=infra validate
+            - name: Validate bootstrap stack
+              run: |
+                  terraform -chdir=infra/bootstrap init -backend=false -input=false
+                  terraform -chdir=infra/bootstrap validate
+
     # Generates coverage and uploads it to Codecov. Informational only — this
     # job is intentionally NOT in deploy-client's needs, so coverage never blocks
     # a deploy. Codecov posts the project/patch status checks and PR comment
