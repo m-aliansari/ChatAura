@@ -10,14 +10,6 @@
             "type": "chrome",
             "url": "http://localhost:5173",
             "webRoot": "${workspaceFolder}/packages/client"
-        },
-        {
-            "type": "node",
-            "request": "launch",
-            "name": "Express debug",
-            "skipFiles": ["<node_internals>/**", "node_modules/**"],
-            "cwd": "${workspaceFolder}/packages/server",
-            "program": "index.js"
         }
     ]
 }
