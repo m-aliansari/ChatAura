@@ -2,6 +2,14 @@ data "aws_caller_identity" "current" {}
 
 resource "aws_s3_bucket" "state" {
   bucket = "${var.project}-tfstate-${data.aws_caller_identity.current.account_id}"
+
+  # This bucket is the only record of what the app stack owns. Destroying it
+  # while the app stack is live orphans every resource in it -- they keep
+  # running, and Terraform no longer knows they exist. Tear down infra/ first,
+  # then remove this block deliberately.
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 # The undo button: a corrupted or truncated state can be rolled back to a

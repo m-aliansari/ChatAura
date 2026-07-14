@@ -129,9 +129,26 @@ Check the transport, too: in DevTools → Network → **WS** there should be a l
 
 ## Destroy
 
+**Always the app stack first, then bootstrap.** Terraform orders the teardown correctly _within_ a state file, but it has no idea the two stacks are related — and bootstrap holds the S3 bucket containing the app stack's state. Destroy bootstrap while the app stack is live and you delete the only record of what those resources are: they keep running, and Terraform no longer knows they exist.
+
 ```bash
 terraform destroy -var image_tag=v1   # in infra/ — the variable is unused here, just required
-cd bootstrap && terraform destroy     # only when you also want the registry and secrets gone
+```
+
+That is normally all you want: it stops the billing, and leaves the registry, the secrets and the state bucket in place so the next `apply` needs no image push and no re-entered credentials.
+
+Tearing down `bootstrap/` as well is a deliberate act, and the state bucket carries `prevent_destroy` to make sure it stays one — `terraform destroy` there will refuse until you remove that `lifecycle` block by hand. The bucket is also versioned, so it must be emptied of _every object version and delete marker_ before S3 will drop it:
+
+```bash
+B=$(terraform output -raw state_bucket)
+
+aws s3api delete-objects --bucket "$B" --delete "$(aws s3api list-object-versions \
+  --bucket "$B" --query '{Objects: Versions[].{Key:Key,VersionId:VersionId}}' --output json)"
+
+aws s3api delete-objects --bucket "$B" --delete "$(aws s3api list-object-versions \
+  --bucket "$B" --query '{Objects: DeleteMarkers[].{Key:Key,VersionId:VersionId}}' --output json)"
+
+terraform destroy
 ```
 
 Terraform tears down in reverse dependency order — the same graph that built the stack, run backwards. Doing this by hand means deleting ~35 resources in the right order, which is easy to leave half-finished and still paying. Afterwards, confirm nothing survives:
