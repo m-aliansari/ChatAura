@@ -77,7 +77,7 @@ yarn install
 **`packages/server/.env`**
 
 ```
-PORT=
+PORT=4000
 JWT_SECRET=
 NODE_ENV=development
 DATABASE_NAME=
@@ -85,15 +85,17 @@ DATABASE_HOST=
 DATABASE_USER=
 DATABASE_PASSWORD=
 DATABASE_PORT=
-REDIS_USERNAME=
-REDIS_PASSWORD=
-REDIS_SOCKET_HOST=
-REDIS_SOCKET_PORT=
+DATABASE_SSL=            # true for managed Postgres (RDS rejects plaintext connections)
+REDIS_URL=               # redis://localhost:6379
 CLIENT_BASE_URL=
 CLIENT_BASE_URL_DEV=
+DISABLE_FCM=true         # false requires FIREBASE_SERVICE_ACCOUNT_JSON below
+FIREBASE_SERVICE_ACCOUNT_JSON=
 ```
 
-> Remote (authenticated) Redis is used only when `NODE_ENV=production`; in development a local Redis is used. For push notifications, place a Firebase `service-account.json` in `packages/server/` (gitignored).
+> `REDIS_URL` is preferred; it falls back to the discrete `REDIS_{USERNAME,PASSWORD,SOCKET_HOST,SOCKET_PORT}` vars, then to a local default. Redis config is **not** keyed off `NODE_ENV` — `NODE_ENV` only controls CORS strictness.
+>
+> Firebase credentials come **only** from `FIREBASE_SERVICE_ACCOUNT_JSON` (raw JSON or base64 — prefer base64, since the private key is multi-line). There is no on-disk fallback, so no image layer or working tree ever holds the credential. `DISABLE_FCM=true` stubs push out entirely.
 
 **`packages/client/.env`** (Vite requires the `VITE_` prefix)
 
@@ -131,7 +133,7 @@ Run from the repo root:
 
 | Command             | Description                        |
 | ------------------- | ---------------------------------- |
-| `yarn dev:server`   | Start the backend (nodemon)        |
+| `yarn dev:server`   | Start the backend (`tsx watch`)    |
 | `yarn dev:client`   | Start the Vite dev server          |
 | `yarn build:client` | Production build of the client     |
 | `yarn start`        | Run the backend (production entry) |
