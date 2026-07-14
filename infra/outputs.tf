@@ -3,11 +3,6 @@ output "alb_dns_name" {
   value       = aws_lb.main.dns_name
 }
 
-output "ecr_repository_url" {
-  description = "Registry URL to tag and push the server image to."
-  value       = aws_ecr_repository.server.repository_url
-}
-
 output "rds_endpoint" {
   description = "Postgres hostname (private — reachable only from the tasks security group)."
   value       = aws_db_instance.postgres.address

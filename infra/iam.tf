@@ -24,8 +24,8 @@ data "aws_iam_policy_document" "read_secrets" {
     actions = ["secretsmanager:GetSecretValue"]
     resources = [
       aws_secretsmanager_secret.db_password.arn,
-      aws_secretsmanager_secret.jwt.arn,
-      aws_secretsmanager_secret.firebase.arn,
+      data.aws_secretsmanager_secret.jwt.arn,
+      data.aws_secretsmanager_secret.firebase.arn,
     ]
   }
 }

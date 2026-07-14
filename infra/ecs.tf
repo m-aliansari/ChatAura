@@ -14,8 +14,8 @@ locals {
 
   container_secrets = [
     { name = "DATABASE_PASSWORD", valueFrom = aws_secretsmanager_secret.db_password.arn },
-    { name = "JWT_SECRET", valueFrom = aws_secretsmanager_secret.jwt.arn },
-    { name = "FIREBASE_SERVICE_ACCOUNT_JSON", valueFrom = aws_secretsmanager_secret.firebase.arn },
+    { name = "JWT_SECRET", valueFrom = data.aws_secretsmanager_secret.jwt.arn },
+    { name = "FIREBASE_SERVICE_ACCOUNT_JSON", valueFrom = data.aws_secretsmanager_secret.firebase.arn },
   ]
 
   log_config = {
@@ -43,7 +43,7 @@ resource "aws_ecs_task_definition" "server" {
   container_definitions = jsonencode([
     {
       name      = "server"
-      image     = "${aws_ecr_repository.server.repository_url}:${var.image_tag}"
+      image     = "${data.aws_ecr_repository.server.repository_url}:${var.image_tag}"
       essential = true
 
       portMappings = [{ containerPort = 4000 }]
@@ -91,7 +91,7 @@ resource "aws_ecs_task_definition" "migration" {
   container_definitions = jsonencode([
     {
       name      = "migration"
-      image     = "${aws_ecr_repository.server.repository_url}:${var.image_tag}"
+      image     = "${data.aws_ecr_repository.server.repository_url}:${var.image_tag}"
       essential = true
       command   = ["node", "--import", "tsx", "packages/server/scripts/migrate.ts"]
 

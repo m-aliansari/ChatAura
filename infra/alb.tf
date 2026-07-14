@@ -27,7 +27,12 @@ resource "aws_lb_target_group" "server" {
     unhealthy_threshold = 3
   }
 
-  stickiness { # ← lesson 2
+  # Socket.io's long-polling upgrade spans several requests that must all reach
+  # the same process, so clients are pinned to one target. This balances per
+  # client rather than per request, and two tasks still cannot deliver to each
+  # other's connected users while rooms and presence live in one process's
+  # memory — the Socket.io Redis adapter is what lifts that, not stickiness.
+  stickiness {
     type    = "lb_cookie"
     enabled = true
   }

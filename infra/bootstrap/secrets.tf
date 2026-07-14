@@ -1,3 +1,5 @@
+# Both stacks are torn down completely, so `destroy` must be able to remove all secrets
+
 resource "aws_secretsmanager_secret" "jwt" {
   name                    = "${var.project}/jwt-secret"
   recovery_window_in_days = 0
