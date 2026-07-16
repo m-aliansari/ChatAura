@@ -1,4 +1,4 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, lt, or, sql } from "drizzle-orm";
 import { db } from "../index.js";
 import { conversations } from "../schema/conversations.js";
 import { conversationMembers } from "../schema/conversationMembers.js";
@@ -11,10 +11,23 @@ import { users } from "../schema/users.js";
 // this so the message INSERT and the member-row bump commit atomically (see services/sendMessage).
 type Executor = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
 
-// Canonical pair, computed in the DB (LEAST/GREATEST) so column order matches under any collation —
-// same discipline friendships uses. A direct conversation is unique per canonical pair.
+// Canonical pair, computed in the DB (LEAST/GREATEST — no Drizzle builder for these) so column
+// order matches under any collation. Same discipline friendships uses. Interpolations are
+// parameterised by the `sql` template, not string-concatenated.
 const canonicalA = (a: string, b: string) => sql`LEAST(${a}, ${b})`;
 const canonicalB = (a: string, b: string) => sql`GREATEST(${a}, ${b})`;
+
+// Match the direct conversation for a pair, order-independently — mirrors friendships' `matchesPair`.
+// `eq` on the discriminator still hits the partial unique index (`... WHERE type = 'direct'`):
+// node-postgres sends unnamed statements, so Postgres plans with the bound value and can prove the
+// index predicate. (A *named* prepared statement reused into a generic plan could not — verified by
+// EXPLAIN — so don't wrap this call in `.prepare()` without re-checking the plan.)
+const matchesDirectPair = (a: string, b: string) =>
+    and(
+        eq(conversations.type, "direct"),
+        eq(conversations.user_a_id, canonicalA(a, b)),
+        eq(conversations.user_b_id, canonicalB(a, b)),
+    );
 
 /**
  * Ensure the direct conversation between two users exists (with both member rows) and return its id.
@@ -52,9 +65,7 @@ export const getOrCreateDirectConversation = async (
     const [row] = await executor
         .select({ id: conversations.id })
         .from(conversations)
-        .where(
-            sql`${conversations.type} = 'direct' AND ${conversations.user_a_id} = ${canonicalA(userA, userB)} AND ${conversations.user_b_id} = ${canonicalB(userA, userB)}`,
-        )
+        .where(matchesDirectPair(userA, userB))
         .limit(1);
     return row.id;
 };
@@ -68,9 +79,7 @@ export const getDirectConversationId = async (
     const [row] = await executor
         .select({ id: conversations.id })
         .from(conversations)
-        .where(
-            sql`${conversations.type} = 'direct' AND ${conversations.user_a_id} = ${canonicalA(userA, userB)} AND ${conversations.user_b_id} = ${canonicalB(userA, userB)}`,
-        )
+        .where(matchesDirectPair(userA, userB))
         .limit(1);
     return row?.id;
 };
@@ -139,13 +148,20 @@ export const getConversationsPage = async (
 
     // Keyset condition. When the cursor still has a last_message_id we are in the messaged section
     // (ids are globally unique, so a strict `<` needs no tiebreak; null rows all sort after and are
-    // safe to admit). Once it is null we are in the no-message tail, ordered by (created_at, id).
+    // safe to admit). Once it is null we are in the no-message tail, ordered by (created_at, id) —
+    // a row-constructor comparison, the one part with no Drizzle builder equivalent.
     let cursorCond;
     if (before) {
         cursorCond =
             before.lastMessageId !== null
-                ? sql`(${conversationMembers.last_message_id} IS NULL OR ${conversationMembers.last_message_id} < ${before.lastMessageId})`
-                : sql`(${conversationMembers.last_message_id} IS NULL AND (${conversationMembers.created_at}, ${conversationMembers.conversation_id}) < (${before.createdAt}::timestamptz, ${before.conversationId}))`;
+                ? or(
+                      isNull(conversationMembers.last_message_id),
+                      lt(conversationMembers.last_message_id, before.lastMessageId),
+                  )
+                : and(
+                      isNull(conversationMembers.last_message_id),
+                      sql`(${conversationMembers.created_at}, ${conversationMembers.conversation_id}) < (${before.createdAt}::timestamptz, ${before.conversationId})`,
+                  );
     }
     const where = cursorCond ? and(mine, cursorCond) : mine;
 
@@ -163,7 +179,7 @@ export const getConversationsPage = async (
         })
         .from(conversationMembers)
         .innerJoin(conversations, eq(conversations.id, conversationMembers.conversation_id))
-        .innerJoin(users, sql`${users.user_id} = ${other}`)
+        .innerJoin(users, eq(users.user_id, other))
         .leftJoin(messages, eq(messages.id, conversationMembers.last_message_id))
         .where(where)
         // NULLS LAST is spelled out on BOTH keys so this ordering matches the inbox index exactly.
