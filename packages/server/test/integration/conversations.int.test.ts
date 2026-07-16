@@ -155,6 +155,56 @@ describe("conversations repository (integration)", () => {
         expect([...seen].sort()).toEqual([...friends].sort());
     });
 
+    it("walks a MIXED inbox via the cursor, crossing from messaged into the no-message tail", async () => {
+        // The cursor has two branches: one for the messaged section, one for the no-message tail
+        // (a row-constructor keyset). The all-messaged walk above never reaches the second, which is
+        // the subtler of the two — it must cross the boundary without gaps or duplicates.
+        const me = await insertUser();
+
+        // 3 friends WITH messages: the newest message sorts its conversation highest.
+        const messaged: string[] = [];
+        for (let i = 0; i < 3; i++) {
+            const f = await insertUser();
+            const cid = await getOrCreateDirectConversation(me.user_id, f.user_id);
+            await sendMessage({
+                message_id: uuid(),
+                conversation_id: cid,
+                sender_user_id: me.user_id,
+                content: `msg ${i}`,
+            });
+            messaged.push(f.user_id);
+        }
+
+        // 3 friends with NO messages: they sort after all messaged ones, newest-added first.
+        const empty: string[] = [];
+        for (let i = 0; i < 3; i++) {
+            const f = await insertUser();
+            await getOrCreateDirectConversation(me.user_id, f.user_id);
+            empty.push(f.user_id);
+        }
+
+        // messaged newest-first, then the no-message tail newest-added-first
+        const expected = [...messaged].reverse().concat([...empty].reverse());
+
+        const walked: string[] = [];
+        let cursor = undefined;
+        let sawNullCursor = false;
+        for (let guard = 0; ; guard++) {
+            const page = await getConversationsPage(me.user_id, { before: cursor, limit: 2 });
+            walked.push(...page.conversations.map((c) => c.user_id));
+            if (page.cursor?.lastMessageId === null) sawNullCursor = true;
+            if (!page.hasMore) break;
+            cursor = page.cursor ?? undefined;
+            if (guard > 10) throw new Error("cursor did not terminate");
+        }
+
+        // Exact order across the boundary, every conversation exactly once.
+        expect(walked).toEqual(expected);
+        expect(new Set(walked).size).toBe(expected.length);
+        // ...and the walk really did exercise the no-message-tail cursor branch.
+        expect(sawNullCursor).toBe(true);
+    });
+
     it("deleteConversationCascade removes the messages, members and the conversation row", async () => {
         const alice = await insertUser();
         const bob = await insertUser();
