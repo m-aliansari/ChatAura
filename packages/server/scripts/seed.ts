@@ -17,6 +17,10 @@ import { db } from "../db/index.js";
 import { messages } from "../db/schema/messages.js";
 import { getUserByUsername } from "../db/repositories/users.js";
 import { addFriendship } from "../db/repositories/friendships.js";
+import {
+    getOrCreateDirectConversation,
+    bumpConversationLastMessage,
+} from "../db/repositories/conversations.js";
 import { registerUser } from "../services/registerUser.js";
 
 if (process.env.NODE_ENV === "production") {
@@ -29,17 +33,58 @@ const FRIENDS = Number(process.env.SEED_FRIENDS ?? 40);
 const MESSAGES = Number(process.env.SEED_MESSAGES ?? 60);
 const USERNAME = process.env.SEED_USERNAME ?? "demouser";
 const PASSWORD = process.env.SEED_PASSWORD ?? "secret1";
+const FULLNAME = process.env.SEED_FULLNAME ?? "Demo User";
+
+// Display names for seeded friends. Cycled first/last lists give varied, realistic names for the
+// WhatsApp-style list — and, unlike the "friendNN" usernames, they are digit-free so they satisfy
+// `registerCredentialsSchema`'s full-name pattern (letters/spaces/.'- only).
+const SEED_FIRST_NAMES = [
+    "Ava",
+    "Ben",
+    "Cara",
+    "Dan",
+    "Ella",
+    "Finn",
+    "Gina",
+    "Hugo",
+    "Iris",
+    "Jack",
+    "Kira",
+    "Leo",
+    "Mia",
+    "Noah",
+    "Owen",
+    "Priya",
+    "Quinn",
+    "Rosa",
+    "Sam",
+    "Tara",
+];
+const SEED_LAST_NAMES = [
+    "Adams",
+    "Brown",
+    "Clark",
+    "Davis",
+    "Evans",
+    "Ford",
+    "Gray",
+    "Hill",
+    "Ives",
+    "Jones",
+];
+const seedFullName = (i: number) =>
+    `${SEED_FIRST_NAMES[i % SEED_FIRST_NAMES.length]} ${SEED_LAST_NAMES[i % SEED_LAST_NAMES.length]}`;
 
 /**
  * Reuse an existing user so the seeder is re-runnable without --reset. New users go through
  * `registerUser`, the same domain operation `/auth/register` uses — so the seeder cannot create
  * an account that fails `authFormSchema` and would be rejected at login with a 422.
  */
-const ensureUser = async (username: string, password: string) => {
+const ensureUser = async (username: string, password: string, fullName: string) => {
     const existing = await getUserByUsername(username);
     if (existing) return existing;
 
-    const result = await registerUser({ username, password });
+    const result = await registerUser({ username, password, fullName });
     if (!result.ok) {
         const why = result.reason === "invalid" ? result.message : "username taken";
         throw new Error(`Refusing to seed un-loginable account "${username}": ${why}`);
@@ -60,26 +105,32 @@ const seed = async () => {
         (_, i) => `friend${String(i + 1).padStart(2, "0")}`,
     );
 
-    const me = await ensureUser(USERNAME, PASSWORD);
+    const me = await ensureUser(USERNAME, PASSWORD, FULLNAME);
     console.log(`Primary user: ${me.username} (user_id ${me.user_id})`);
 
     for (let i = 1; i <= FRIENDS; i++) {
-        const friend = await ensureUser(friendNames[i - 1], PASSWORD);
+        const friend = await ensureUser(friendNames[i - 1], PASSWORD, seedFullName(i - 1));
         await addFriendship(me.user_id, friend.user_id);
+        const conversationId = await getOrCreateDirectConversation(me.user_id, friend.user_id);
 
         if (MESSAGES > 0) {
             // Bulk-insert the conversation: ids ascend with insertion order, which is exactly
-            // what the `id` pagination cursor relies on.
+            // what the `id` pagination cursor relies on. Friends are seeded in order, so later
+            // friends get higher message ids and sort to the top of the inbox — a live demo of the
+            // latest-message ordering.
             const rows = Array.from({ length: MESSAGES }, (_, n) => {
                 const fromFriend = n % 2 === 1;
                 return {
                     message_id: uuid(),
-                    from_user_id: fromFriend ? friend.user_id : me.user_id,
-                    to_user_id: fromFriend ? me.user_id : friend.user_id,
+                    conversation_id: conversationId,
+                    sender_user_id: fromFriend ? friend.user_id : me.user_id,
                     content: `Message ${n + 1} of ${MESSAGES} with ${friend.username}`,
                 };
             });
-            await db.insert(messages).values(rows);
+            const inserted = await db.insert(messages).values(rows).returning({ id: messages.id });
+            // Seed the denormalised inbox sort pointer for both members.
+            const maxId = Math.max(...inserted.map((r) => r.id));
+            await bumpConversationLastMessage(conversationId, maxId);
         }
 
         if (i % 10 === 0) console.log(`  seeded ${i}/${FRIENDS} friends`);

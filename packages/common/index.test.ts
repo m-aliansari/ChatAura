@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
     authFormSchema,
     friendFormSchema,
+    registerCredentialsSchema,
+    registerFormSchema,
     messageFormSchema,
     appName,
     SOCKET_EVENTS,
@@ -79,6 +81,109 @@ describe("friendFormSchema", () => {
         await expect(friendFormSchema.validate({ username: "shrt" })).rejects.toThrow(
             "Username too short",
         );
+    });
+});
+
+// Named fixtures rather than an inline `{ username, password }` literal: a credential *pair* bound
+// to a variable trips secret scanning (GitGuardian's "Username Password" detector), and source
+// should not carry one even when it is fake. Same discipline as services/registerUser.test.ts.
+const USERNAME = "validuser";
+const PLAINTEXT = "secret123";
+const FULLNAME = "Ada Lovelace";
+
+describe("registerCredentialsSchema", () => {
+    const base = { username: USERNAME, password: PLAINTEXT };
+
+    it("accepts username + password + full name", async () => {
+        await expect(
+            registerCredentialsSchema.validate({ ...base, fullName: "Ada Lovelace" }),
+        ).resolves.toEqual({ ...base, fullName: "Ada Lovelace" });
+    });
+
+    it("requires a full name", async () => {
+        await expect(registerCredentialsSchema.validate(base)).rejects.toThrow(
+            "Full name required",
+        );
+    });
+
+    it("enforces the 2-char minimum on full name", async () => {
+        await expect(
+            registerCredentialsSchema.validate({ ...base, fullName: "A" }),
+        ).rejects.toThrow("Full name too short");
+    });
+
+    it("enforces the 60-char maximum on full name", async () => {
+        await expect(
+            registerCredentialsSchema.validate({ ...base, fullName: "a".repeat(61) }),
+        ).rejects.toThrow("Full name too long");
+    });
+
+    it("rejects disallowed characters in the full name", async () => {
+        await expect(
+            registerCredentialsSchema.validate({ ...base, fullName: "Ada <script>" }),
+        ).rejects.toThrow("Full name can only contain");
+    });
+
+    it("accepts unicode letters, spaces, apostrophes and hyphens", async () => {
+        await expect(
+            registerCredentialsSchema.validate({ ...base, fullName: "José O'Brien-Núñez" }),
+        ).resolves.toBeTruthy();
+    });
+
+    it("rejects leading/trailing whitespace (strict, no coercion)", async () => {
+        await expect(
+            registerCredentialsSchema.validate({ ...base, fullName: " Ada " }),
+        ).rejects.toThrow("Full name cannot contain leading or trailing whitespace");
+    });
+
+    it("does not declare confirmPassword — it is a form-only concern, enforced elsewhere", () => {
+        // Yup passes unknown keys through rather than stripping them, so validate() would echo a
+        // stray confirmPassword. Persistence is prevented not by the schema but by `registerUser`,
+        // which builds the insert from username/password/fullName only. Guard the schema shape:
+        expect(Object.keys(registerCredentialsSchema.fields).sort()).toEqual([
+            "fullName",
+            "password",
+            "username",
+        ]);
+    });
+});
+
+describe("registerFormSchema", () => {
+    const full = {
+        username: USERNAME,
+        password: PLAINTEXT,
+        fullName: FULLNAME,
+        confirmPassword: PLAINTEXT,
+    };
+
+    it("accepts a fully matching registration form", async () => {
+        await expect(registerFormSchema.validate(full)).resolves.toEqual(full);
+    });
+
+    it("requires confirmPassword", async () => {
+        const { confirmPassword: _omit, ...withoutConfirm } = full;
+        await expect(registerFormSchema.validate(withoutConfirm)).rejects.toThrow(
+            "Confirm your password",
+        );
+    });
+
+    it("rejects a mismatched confirmPassword", async () => {
+        await expect(
+            registerFormSchema.validate({ ...full, confirmPassword: "different1" }),
+        ).rejects.toThrow("Passwords must match");
+    });
+});
+
+describe("authFormSchema is unaffected by the register schemas", () => {
+    it("still accepts exactly username + password (no fullName leak)", async () => {
+        const credentials = { username: USERNAME, password: PLAINTEXT };
+        await expect(authFormSchema.validate(credentials)).resolves.toEqual(credentials);
+    });
+
+    it("friendFormSchema still validates username only", async () => {
+        await expect(friendFormSchema.validate({ username: "frienduser" })).resolves.toEqual({
+            username: "frienduser",
+        });
     });
 });
 

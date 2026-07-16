@@ -4,7 +4,7 @@ import { useContext, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { API_BASE_URL } from "../../../constants/api";
 import { ROUTE_NAMES } from "../../../constants/routes";
-import { API_ROUTES, authFormSchema } from "@realtime-chatapp/common";
+import { API_ROUTES, registerFormSchema } from "@realtime-chatapp/common";
 import { UserContext } from "../../../contexts/User/UserContext.js";
 import { GENERIC_ERROR } from "@realtime-chatapp/common";
 import { LOCAL_STORAGE_TOKEN_KEY } from "../../../constants/auth.js";
@@ -15,10 +15,12 @@ export const Signup = () => {
     const navigate = useNavigate();
     const formik = useFormik({
         initialValues: {
+            fullName: "",
             username: "",
             password: "",
+            confirmPassword: "",
         },
-        validationSchema: authFormSchema,
+        validationSchema: registerFormSchema,
         onSubmit: (values, actions) => {
             const vals = { ...values };
             actions.resetForm();
@@ -59,7 +61,18 @@ export const Signup = () => {
             <Text as="p" color="red.500">
                 {error}
             </Text>
-            <Field.Root invalid={formik.errors.username && formik.touched.password}>
+            <Field.Root invalid={formik.errors.fullName && formik.touched.fullName}>
+                <Field.Label size={"lg"}>Full Name</Field.Label>
+                <Input
+                    name="fullName"
+                    placeholder="Enter your full name"
+                    autoComplete="off"
+                    size={"lg"}
+                    {...formik.getFieldProps("fullName")}
+                />
+                <Field.ErrorText>{formik.errors.fullName}</Field.ErrorText>
+            </Field.Root>
+            <Field.Root invalid={formik.errors.username && formik.touched.username}>
                 <Field.Label size={"lg"}>Username</Field.Label>
                 <Input
                     name="username"
@@ -81,6 +94,18 @@ export const Signup = () => {
                     {...formik.getFieldProps("password")}
                 />
                 <Field.ErrorText>{formik.errors.password}</Field.ErrorText>
+            </Field.Root>
+            <Field.Root invalid={formik.errors.confirmPassword && formik.touched.confirmPassword}>
+                <Field.Label size={"lg"}>Confirm Password</Field.Label>
+                <Input
+                    name="confirmPassword"
+                    type="password"
+                    placeholder="Re-enter password"
+                    autoComplete="off"
+                    size={"lg"}
+                    {...formik.getFieldProps("confirmPassword")}
+                />
+                <Field.ErrorText>{formik.errors.confirmPassword}</Field.ErrorText>
             </Field.Root>
             <ButtonGroup>
                 <Button colorPalette={"teal"} type="submit">

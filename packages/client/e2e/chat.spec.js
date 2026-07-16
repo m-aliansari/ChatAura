@@ -70,7 +70,9 @@ test("UserA can send a message to UserB and it appears in UserB's chat window", 
     await pageA.getByPlaceholder("Type message here...").fill(message);
     await pageA.getByRole("button", { name: "Send" }).click();
 
-    const messageInB = pageB.getByText(message);
+    // Scope to the conversation pane: the message text also appears in the sidebar now, as that
+    // conversation's last-message preview, so an unscoped getByText matches two elements.
+    const messageInB = pageB.getByTestId(`messages-scroll:${a.user_id}`).getByText(message);
     await expect(messageInB).toBeVisible();
 });
 
@@ -91,5 +93,8 @@ test("a user receives messages sent while they were offline, on next login", asy
     // UserB logs in later and should see the message waiting in the conversation.
     const pageB = await openAppAs(b);
     await pageB.getByRole("tab", { name: a.username }).click();
-    await expect(pageB.getByText(message)).toBeVisible();
+    // Scoped to the conversation pane — the sidebar preview shows the same text.
+    await expect(
+        pageB.getByTestId(`messages-scroll:${a.user_id}`).getByText(message),
+    ).toBeVisible();
 });

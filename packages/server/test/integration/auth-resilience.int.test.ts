@@ -56,8 +56,10 @@ describe("auth resilience — server stays graceful when Postgres fails", () => 
         vi.spyOn(usersRepo, "addUser").mockRejectedValue(new Error("db down"));
 
         const res = await post(API_ROUTES.AUTH.REGISTER, {
+            fullName: "New User",
             username: "newuser1",
             password: "secret1",
+            confirmPassword: "secret1",
         });
         const data = await readJson(res);
 

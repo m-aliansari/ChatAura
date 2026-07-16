@@ -2,20 +2,19 @@ import { appName } from "@realtime-chatapp/common";
 import { redisClient } from "../redis.js";
 import type { Message } from "../../db/schema/messages.js";
 
-// Given friends fetched from Postgres ({ username, user_id }), enrich each with live
-// presence read from the Redis presence hash (the `connected` flag stays in Redis).
-export const enrichWithPresence = async (friends: { username: string; user_id: string }[]) => {
-    const enriched = [];
+// Enrich each row (anything carrying a `username`) with live presence from the Redis presence hash
+// (the `connected` flag stays in Redis). Generic + spread so it preserves the caller's other fields
+// (full_name, conversationId, lastMessage, …) instead of narrowing to { username, user_id }.
+export const enrichWithPresence = async <T extends { username: string }>(
+    friends: T[],
+): Promise<(T & { connected: boolean })[]> => {
+    const enriched: (T & { connected: boolean })[] = [];
 
     for (const friend of friends) {
         const connected =
             (await redisClient.hGet(getHashMapKey(friend.username), "connected")) === "true";
 
-        enriched.push({
-            username: friend.username,
-            user_id: friend.user_id,
-            connected,
-        });
+        enriched.push({ ...friend, connected });
     }
 
     return enriched;
@@ -34,14 +33,26 @@ export const MESSAGES_PAGE_SIZE = 30;
 export const MESSAGE_SENT_CHANNEL = `${appName}:events:message-sent`;
 
 // The wire shape for a message. `id` (bigserial) is the client's pagination cursor; the client
-// dedupes on `messageId`. `createdAt` is informational (emitted as an ISO string).
-export const toWireMessage = (m: Message) => ({
+// dedupes on `messageId`. `to`/`from` are kept (so the current client, which keys messages by the
+// conversation partner, is unchanged) — `to` (the recipient) is supplied by the caller: the send
+// path already has it, read paths compute it from the conversation pair (MessageRow.to_user_id).
+// `conversationId` is included for the sort/UI work that keys on the conversation directly.
+export type WireMessage = {
+    id: number;
+    messageId: string;
+    conversationId: number;
+    to: string;
+    from: string;
+    content: string;
+    createdAt: string;
+};
+
+export const toWireMessage = (m: Message, to: string): WireMessage => ({
     id: m.id,
     messageId: m.message_id,
-    to: m.to_user_id,
-    from: m.from_user_id,
+    conversationId: m.conversation_id,
+    to,
+    from: m.sender_user_id,
     content: m.content,
     createdAt: m.created_at.toISOString(),
 });
-
-export type WireMessage = ReturnType<typeof toWireMessage>;

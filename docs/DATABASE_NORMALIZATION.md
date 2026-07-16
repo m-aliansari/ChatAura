@@ -184,6 +184,30 @@ Normalize first. Denormalize **only** as a deliberate, measured optimization:
 
 A duplicated value with no consistency mechanism is a bug, not an optimization.
 
+### Worked example in this codebase — `conversation_members.last_message_id`
+
+The inbox ("sort my conversations by latest message") is the one place this app denormalizes on
+purpose, and it satisfies every bullet above:
+
+- **The normalized read can't meet the hot path.** The sort key (latest message) lives in
+  `messages`, while the filter ("conversations I'm a member of") lives in `conversation_members`.
+  Split across two tables, Postgres must gather _all_ my conversations before it can top-N sort —
+  work that grows with conversation count on a read that runs on every connect. Co-locating the sort
+  key on the member row turns it into a single index range-scan over
+  `(user_id, last_message_id DESC NULLS LAST, created_at DESC)` that touches only one page of rows.
+- **The write-time cost is accepted and bounded.** `services/sendMessage.ts` keeps the copy correct
+  with a **transactional dual-write**: the message `INSERT` and one
+  `UPDATE conversation_members … WHERE conversation_id` commit together. The fan-out is bounded by
+  that conversation's member count — never system-wide.
+- **It's a pointer, not a copy.** `last_message_id` stores `messages.id`, not the message _content_,
+  so `messages` stays the single source of truth and the preview is read live through the pointer.
+  There is no text to drift.
+
+Note also what is **not** a violation here: `conversations.created_at` and `conversation_members
+.created_at` look duplicative but are each the owning row's own fact ("conversation started" vs
+"member joined"), and they are immutable — nothing to keep in sync. Contrast with copying
+`friendships.created_at` onto a member row, which _would_ be a mirrored mutable-ish value.
+
 ---
 
 ## Create-a-table checklist

@@ -1,6 +1,6 @@
 import { SOCKET_EVENTS } from "@realtime-chatapp/common";
 import { emitConnectionStatus } from "./emitConnectionStatus.js";
-import { getFriendsPage } from "../../db/repositories/friendships.js";
+import { getConversationsPage } from "../../db/repositories/conversations.js";
 import { getRecentMessagesForConversations } from "../../db/repositories/messages.js";
 import { redisClient } from "../redis.js";
 import {
@@ -23,24 +23,29 @@ export const initializeUser = async (socket: Socket) => {
     // Tell ALL friends this user just came online.
     await emitConnectionStatus(socket, true);
 
-    // First page of friends for the sidebar; infinite scroll continues via LOAD_MORE_FRIENDS.
-    const { friends, hasMore, cursor } = await getFriendsPage(socket.user.user_id, {
+    // First page of the sidebar — the inbox, sorted by latest activity (LOAD_MORE_FRIENDS continues
+    // it). A conversation row is a backward-compatible superset of the old friend object, so the
+    // current client renders it unchanged; the new fields (full_name / conversationId / lastMessage)
+    // are for the WhatsApp-style row.
+    const { conversations, hasMore, cursor } = await getConversationsPage(socket.user.user_id, {
         limit: FRIENDS_PAGE_SIZE,
     });
-    const enrichedFriends = await enrichWithPresence(friends);
+    const friends = await enrichWithPresence(conversations);
 
-    // Recent messages scoped to only the paged-in conversations — a bounded connect payload
-    // (was an unbounded lRange of the whole Redis chat list).
+    // Recent messages scoped to only the paged-in conversations — a bounded connect payload.
     const rows = await getRecentMessagesForConversations(
-        socket.user.user_id,
-        friends.map((f) => f.user_id),
+        conversations.map((c) => c.conversationId),
         MESSAGES_PAGE_SIZE,
     );
 
-    // Emit LAST, after all awaits — the caller (index.ts) registers the DIRECT_MESSAGE /
-    // LOAD_* listeners only after `await initializeUser` resolves, so any async work *between*
-    // emitting FRIENDS_LIST and returning would open a window where a client that sends the
-    // instant it sees FRIENDS_LIST has its message dropped (no listener yet → no ack → hang).
-    socket.emit(SOCKET_EVENTS.FRIENDS_LIST, { friends: enrichedFriends, hasMore, cursor });
-    if (rows.length) socket.emit(SOCKET_EVENTS.MESSAGES, rows.map(toWireMessage));
+    // Emit LAST, after all awaits — the caller (index.ts) registers the DIRECT_MESSAGE / LOAD_*
+    // listeners only after `await initializeUser` resolves, so any async work *between* emitting
+    // FRIENDS_LIST and returning would open a window where a client that sends the instant it sees
+    // FRIENDS_LIST has its message dropped (no listener yet → no ack → hang).
+    socket.emit(SOCKET_EVENTS.FRIENDS_LIST, { friends, hasMore, cursor });
+    if (rows.length)
+        socket.emit(
+            SOCKET_EVENTS.MESSAGES,
+            rows.map((r) => toWireMessage(r, r.to_user_id)),
+        );
 };

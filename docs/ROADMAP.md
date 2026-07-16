@@ -14,14 +14,15 @@ The app historically treated **Redis as its primary database**: messages and the
 
 ### Current state (what's true today)
 
-| Data                                    | Home today                                              | Correct?                 |
-| --------------------------------------- | ------------------------------------------------------- | ------------------------ |
-| Users (id, username, passhash, user_id) | Postgres                                                | ✅                       |
-| FCM tokens                              | Postgres `fcm_tokens` table + Redis cache-aside         | ✅ (normalized, Stage 2) |
-| Presence (`connected` flag)             | Redis hash `user_id:<username>`                         | ✅ ephemeral             |
-| Rate-limit counters                     | Redis (TTL keys)                                        | ✅ ephemeral             |
-| **Friendships**                         | Postgres `friendships` (canonical row) + Redis presence | ✅ (Stage 2)             |
-| **Messages**                            | Postgres `messages` (one row/message, proper columns)   | ✅ (Stage 3)             |
+| Data                                               | Home today                                                                                                    | Correct?                                                  |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| Users (id, username, passhash, user_id, full_name) | Postgres                                                                                                      | ✅                                                        |
+| FCM tokens                                         | Postgres `fcm_tokens` table + Redis cache-aside                                                               | ✅ (normalized, Stage 2)                                  |
+| Presence (`connected` flag)                        | Redis hash `user_id:<username>`                                                                               | ✅ ephemeral                                              |
+| Rate-limit counters                                | Redis (TTL keys)                                                                                              | ✅ ephemeral                                              |
+| **Friendships**                                    | Postgres `friendships` (canonical row) + Redis presence                                                       | ✅ (Stage 2)                                              |
+| **Messages**                                       | Postgres `messages` (one row/message, scoped to a `conversation_id`)                                          | ✅ (Stage 3; conversation-centric since the inbox rework) |
+| **Conversations + membership/inbox**               | Postgres `conversations` + `conversation_members` (per-user state; `last_message_id` = denormalized sort key) | ✅ (inbox rework)                                         |
 
 ---
 
@@ -91,7 +92,7 @@ Adopted **Drizzle** as the single data-access layer and migration authority (`dr
 
 A `messages` table with proper columns (surrogate `bigserial id` as the pagination cursor + a `message_id` uuid as the stable wire id; `text content` kills the dot-delimiter bug). Each send is now a **single atomic `INSERT`** (replacing the non-transactional dual `lPush`), and remove-friend is a single atomic `DELETE` of the conversation. Data-access is `db/repositories/messages.ts` (`saveMessage`, `getConversation`, `getRecentMessagesForConversations`, `deleteConversation`); the Redis `chat:<user_id>` lists are gone.
 
-- **History + pagination (both directions):** the connect-time load is now **bounded** — the first page of friends (`getFriendsPage`, stable `created_at`-desc order) plus the recent N messages for _only_ that page's conversations (replaces the unbounded `getFriends` + `lRange(0,-1)`). Two new cursor-paginated socket events drive infinite scroll: `LOAD_OLDER` (older messages within a conversation, cursored on `id`) and `LOAD_MORE_FRIENDS` (next friends page, returning that page's recent messages in the ack). Sort-the-friends-list-by-latest-message was scoped out (deferred); friends page in friendship-recency order.
+- **History + pagination (both directions):** the connect-time load is now **bounded** — the first page of friends (`getFriendsPage`, stable `created_at`-desc order) plus the recent N messages for _only_ that page's conversations (replaces the unbounded `getFriends` + `lRange(0,-1)`). Two new cursor-paginated socket events drive infinite scroll: `LOAD_OLDER` (older messages within a conversation, cursored on `id`) and `LOAD_MORE_FRIENDS` (next friends page, returning that page's recent messages in the ack). Sort-the-friends-list-by-latest-message was scoped out here and **has since landed** — see "Inbox rework" below, which replaced `getFriendsPage` (friendship-recency) with `getConversationsPage`.
 - **FCM decoupled (principle 4):** the send path no longer calls FCM inline. It publishes a `message-sent` event on a Redis pub/sub channel (`${appName}:events:message-sent`); a boot-time subscriber (`utils/events/messageSentSubscriber.ts`) consumes it and sends the push, keeping notification latency/errors off the message critical path and making the notification path the easy first service extraction (Stage 6). See the multi-instance caveat under Stage 5.
 
 ### Stage 4 — Dockerize (4a) ✅ + AWS deploy validated (4b) ✅ + Terraform (4c) ✅ DONE
@@ -135,6 +136,18 @@ Four decisions worth carrying forward:
 CI gained a **`terraform` job** (`fmt -check` + `validate` on both root modules) with **no AWS credentials**, `-backend=false`, and no `plan`/`apply` — a syntax gate, the Terraform counterpart of `tsc --noEmit`. Worth being precise about its limits: it caught nothing that an `apply` wouldn't, because the errors it _cannot_ see are the semantic ones (a mistyped region, a nonexistent engine version, a hyphen in an RDS master username — all of which `validate` accepts happily and AWS rejects minutes later). It gates typos, not correctness.
 
 Docs: [`infra/README.md`](../infra/README.md) — written as a **deployment guide for a reader**, not a diary.
+
+### Inbox rework — conversation-centric messaging + WhatsApp-style list ✅ DONE
+
+Product ask: full names at registration (+ confirm password) shown instead of usernames; a WhatsApp-style list (name + last-message preview + time/day) **sorted by latest message**, falling back to friendship recency; dark-mode throughout. Delivering the sort properly forced the messaging model.
+
+- **Conversation-centric model.** A message now belongs to a `conversations` row, not a user pair (`messages`: `from_user_id`/`to_user_id` → `conversation_id` + `sender_user_id`). A 1:1 chat is a 2-member conversation, a group an N-member one — so **groups become a feature, not a migration**. Done now because migrating the messages table only gets more expensive with more data.
+- **The inbox read.** `conversation_members` is the per-user conversation-state row carrying `last_message_id` — a **denormalized sort key** pointing at the monotonic `messages.id`. The list is one index range-scan over `(user_id, last_message_id DESC NULLS LAST, created_at DESC)`: **flat as conversations grow**, with `created_at` (member-since) ordering the no-message tail.
+- **Fan-out on write, synchronous, no queue.** `services/sendMessage.ts` runs the message `INSERT` + one bounded `UPDATE conversation_members … WHERE conversation_id` in a **single transaction** — the list can never show a stale latest-message. The alternatives were rejected deliberately: putting the sort key on `conversations` keeps writes O(1) but makes the read fetch-then-sort every conversation; a query-time LATERAL is fully normalized but a service split makes the cross-DB join impossible and its sorted pagination unreconstructable. **The sort key must stay co-located with the membership filter.** A broker belongs only to huge-group fan-out or the Stage 6 inter-service bus — not here.
+- **Why this shape:** it matches how cloud-hosted chat actually works. Discord's own write-up describes "one Read State per User per Channel" with counters, kept hot in an LRU cache and persisted write-behind; GetStream's API returns unread channels "sorted by `last_message_at`" with a per-member `last_read`. (WhatsApp sidesteps the problem entirely — history lives **on the device**, so the chat list is a local query — which is not available to us with Postgres as the cloud source of truth.)
+- **Extensible without new infra:** unread + delivered/read receipts land later as `last_read_message_id` / `last_delivered_message_id` **pointers** on the same member row — computed against `messages.id`, so no per-message-per-recipient receipt rows and no sender-side fan-out.
+- **Lifecycle invariant:** friend add/remove create and tear down the conversation atomically with the friendship — the sidebar is built from `conversation_members`, so a friendship without a conversation is invisible. Test/dev seed helpers must create it too.
+- Migration is two ordered steps: **0003** (additive + data backfill: one conversation per friendship, messages routed by canonical pair, sort pointer seeded, orphans dropped) and **0004** (drop legacy columns, enforce `NOT NULL`) — split so `drizzle-kit` could generate them without an interactive rename prompt.
 
 ### Stage 5 — Presence rework + Socket.io Redis adapter (scaling prerequisite)
 

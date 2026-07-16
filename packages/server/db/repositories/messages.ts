@@ -1,46 +1,59 @@
-import { and, desc, eq, lt, or } from "drizzle-orm";
+import { and, desc, eq, lt, sql } from "drizzle-orm";
 import { db } from "../index.js";
+import { conversations } from "../schema/conversations.js";
 import { messages } from "../schema/messages.js";
 import type { Message } from "../schema/messages.js";
 
-// Match a single conversation (both directions) between two users.
-const conversationFilter = (userId: string, otherUserId: string) =>
-    or(
-        and(eq(messages.from_user_id, userId), eq(messages.to_user_id, otherUserId)),
-        and(eq(messages.from_user_id, otherUserId), eq(messages.to_user_id, userId)),
-    );
+// `db` or a transaction handle (see conversations repo) — lets saveMessage run inside the send
+// transaction alongside the member-row bump.
+type Executor = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+// A message row plus the recipient (`to_user_id`) computed from the conversation's canonical pair.
+// The wire still carries `to`/`from` (so the current client is unchanged), so reads resolve the
+// recipient here via a CASE join. Direct conversations only — a group message has no single `to`.
+export type MessageRow = Message & { to_user_id: string };
 
 /**
- * Persist one message. A single INSERT is atomic by construction — this replaces the old
- * non-transactional pair of Redis `lPush`es. Returns the full row (the DB-assigned `id`
- * cursor + `created_at`) so the caller can build the wire payload / ack.
+ * Persist one message (a single INSERT, atomic by construction). Accepts an executor so it can run
+ * inside the send transaction. Returns the full row (DB-assigned `id` cursor + `created_at`).
  */
-export const saveMessage = async (input: {
-    message_id: string;
-    from_user_id: string;
-    to_user_id: string;
-    content: string;
-}): Promise<Message> => {
-    const [row] = await db.insert(messages).values(input).returning();
+export const saveMessage = async (
+    input: {
+        message_id: string;
+        conversation_id: number;
+        sender_user_id: string;
+        content: string;
+    },
+    executor: Executor = db,
+): Promise<Message> => {
+    const [row] = await executor.insert(messages).values(input).returning();
     return row;
 };
 
 /**
- * One conversation, newest-first, cursor-paginated on the surrogate `id`. Pass `before` (an
- * `id`) to fetch the page strictly older than it. Fetches `limit + 1` to report `hasMore`
- * precisely without a second query.
+ * One conversation, newest-first, cursor-paginated on the surrogate `id`. Pass `before` (an `id`)
+ * to fetch the page strictly older than it. Joins `conversations` to derive each message's `to`
+ * (the non-sender participant). Fetches `limit + 1` to report `hasMore` without a second query.
  */
 export const getConversation = async (
-    userId: string,
-    otherUserId: string,
+    conversationId: number,
     { before, limit }: { before?: number; limit: number },
-): Promise<{ messages: Message[]; hasMore: boolean }> => {
-    const filter = conversationFilter(userId, otherUserId);
+): Promise<{ messages: MessageRow[]; hasMore: boolean }> => {
+    const filter = eq(messages.conversation_id, conversationId);
     const where = before === undefined ? filter : and(filter, lt(messages.id, before));
 
     const rows = await db
-        .select()
+        .select({
+            id: messages.id,
+            message_id: messages.message_id,
+            conversation_id: messages.conversation_id,
+            sender_user_id: messages.sender_user_id,
+            content: messages.content,
+            created_at: messages.created_at,
+            to_user_id: sql<string>`CASE WHEN ${messages.sender_user_id} = ${conversations.user_a_id} THEN ${conversations.user_b_id} ELSE ${conversations.user_a_id} END`,
+        })
         .from(messages)
+        .innerJoin(conversations, eq(conversations.id, messages.conversation_id))
         .where(where)
         .orderBy(desc(messages.id))
         .limit(limit + 1);
@@ -50,39 +63,20 @@ export const getConversation = async (
 };
 
 /**
- * The most recent N messages for each of the given conversations (scoped to a page of friend
- * ids so the connect / load-more payload is bounded to friends actually rendered). Reuses
- * `getConversation` per friend — at a page size of ~15 these are a handful of small indexed
- * LIMIT queries; a single windowed CTE is the optimization to reach for only if profiling
- * shows need. Returns a flat, globally newest-first array.
+ * The most recent N messages for each of the given conversations (scoped to a page of conversation
+ * ids so the connect / load-more payload stays bounded). Reuses `getConversation` per conversation
+ * — a handful of small indexed LIMIT queries; a windowed CTE is the optimization to reach for only
+ * if profiling shows need. Returns a flat, globally newest-first array.
  */
 export const getRecentMessagesForConversations = async (
-    userId: string,
-    friendUserIds: string[],
+    conversationIds: number[],
     limitPerConversation: number,
-): Promise<Message[]> => {
-    if (friendUserIds.length === 0) return [];
+): Promise<MessageRow[]> => {
+    if (conversationIds.length === 0) return [];
 
     const perConversation = await Promise.all(
-        friendUserIds.map((friendId) =>
-            getConversation(userId, friendId, { limit: limitPerConversation }),
-        ),
+        conversationIds.map((cid) => getConversation(cid, { limit: limitPerConversation })),
     );
 
     return perConversation.flatMap((r) => r.messages).sort((a, b) => b.id - a.id);
-};
-
-/**
- * Delete an entire conversation (both directions) in a single atomic statement — replaces the
- * old Redis filter-and-rebuild in handleRemoveFriend. Returns how many rows were removed.
- */
-export const deleteConversation = async (
-    userIdA: string,
-    userIdB: string,
-): Promise<{ deleted: number }> => {
-    const deleted = await db
-        .delete(messages)
-        .where(conversationFilter(userIdA, userIdB))
-        .returning({ id: messages.id });
-    return { deleted: deleted.length };
 };

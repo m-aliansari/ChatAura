@@ -33,6 +33,7 @@ export const checkUserExists = async (username: string): Promise<boolean> => {
 export const addUser = async (input: {
     user_id: string;
     username: string;
+    full_name: string;
     passhash: string;
 }): Promise<User> => {
     const [user] = await db.insert(users).values(input).returning();
