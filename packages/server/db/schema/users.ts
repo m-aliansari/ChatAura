@@ -7,6 +7,9 @@ import { pgTable, serial, varchar } from "drizzle-orm/pg-core";
 export const users = pgTable("users", {
     id: serial("id").primaryKey(),
     username: varchar("username", { length: 28 }).notNull().unique(),
+    // Display name shown instead of the username in the friend/conversation list and chat header.
+    // Display-only: presence and all cross-context refs stay keyed on username / user_id.
+    full_name: varchar("full_name", { length: 60 }).notNull(),
     passhash: varchar("passhash").notNull(),
     user_id: varchar("user_id").notNull().unique(),
 });

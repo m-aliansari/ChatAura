@@ -10,6 +10,7 @@ export const handleRegister = async (req: Request, res: Response) => {
         const result = await registerUser({
             username: req.body?.username,
             password: req.body?.password,
+            fullName: req.body?.fullName,
         });
 
         if (!result.ok) {

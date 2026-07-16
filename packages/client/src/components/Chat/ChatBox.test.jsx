@@ -6,22 +6,26 @@ import { SOCKET_EVENTS } from "@realtime-chatapp/common";
 import { renderWithProviders } from "../../test/renderWithProviders.jsx";
 import { SocketContext } from "../../contexts/Socket/SocketContext.js";
 import { MessagesContext } from "../../contexts/Messages/MessagesContext.js";
+import { FriendsContext } from "../../contexts/Friends/FriendsContext.js";
 import { ChatBox } from "./ChatBox.jsx";
 
 function setup(emitImpl) {
     const socket = { emit: vi.fn(emitImpl) };
     const setMessages = vi.fn();
+    const setFriendList = vi.fn();
     const setNewMessage = vi.fn();
     renderWithProviders(
         <SocketContext.Provider value={{ socket }}>
-            <MessagesContext.Provider value={{ setMessages }}>
-                <Tabs.Root value="bob-id">
-                    <ChatBox setNewMessage={setNewMessage} />
-                </Tabs.Root>
-            </MessagesContext.Provider>
+            <FriendsContext.Provider value={{ setFriendList }}>
+                <MessagesContext.Provider value={{ setMessages }}>
+                    <Tabs.Root value="bob-id">
+                        <ChatBox setNewMessage={setNewMessage} />
+                    </Tabs.Root>
+                </MessagesContext.Provider>
+            </FriendsContext.Provider>
         </SocketContext.Provider>,
     );
-    return { socket, setMessages, setNewMessage };
+    return { socket, setMessages, setFriendList, setNewMessage };
 }
 
 describe("ChatBox", () => {
@@ -70,6 +74,36 @@ describe("ChatBox", () => {
         ];
         // the stale optimistic entry is filtered out; the persisted row leads
         expect(committed(prev).map((m) => m.messageId)).toEqual(["m2", "m1"]);
+    });
+
+    it("moves the conversation to the top of the list on ack (sender-side reorder)", async () => {
+        const saved = {
+            id: 3,
+            messageId: "m3",
+            conversationId: 7,
+            to: "bob-id",
+            from: "me-id",
+            content: "hello",
+            createdAt: "2026-07-09T00:00:00.000Z",
+        };
+        const { setFriendList } = setup((event, message, cb) => {
+            if (typeof cb === "function") cb({ done: true, message: saved });
+        });
+
+        await userEvent.type(screen.getByPlaceholderText("Type message here..."), "hello");
+        await userEvent.click(screen.getByRole("button", { name: "Send" }));
+
+        const updater = setFriendList.mock.calls.at(-1)[0];
+        const prev = [
+            { user_id: "carol-id", conversationId: 9, lastMessage: null },
+            { user_id: "bob-id", conversationId: 7, lastMessage: null },
+        ];
+        const next = updater(prev);
+        expect(next.map((f) => f.user_id)).toEqual(["bob-id", "carol-id"]);
+        expect(next[0].lastMessage).toEqual({
+            content: "hello",
+            createdAt: "2026-07-09T00:00:00.000Z",
+        });
     });
 
     it("does not commit anything when the server rejects the send", async () => {

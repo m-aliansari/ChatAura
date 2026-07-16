@@ -18,6 +18,7 @@ import { keyframes } from "@emotion/react";
 import { SocketContext } from "../../contexts/Socket/SocketContext.js";
 import { ScrollLoader } from "../common/ScrollLoader.jsx";
 import { mergeMessages } from "../../utils/mergeMessages.js";
+import { bumpConversation } from "../../utils/bumpConversation.js";
 
 const dotPulse = keyframes(`
   0%   { opacity: 0.2; transform: scale(1); }
@@ -27,7 +28,7 @@ const dotPulse = keyframes(`
 
 export const ChatMessages = ({ onBack }) => {
     const { socket } = useContext(SocketContext);
-    const { friendList } = useContext(FriendsContext);
+    const { friendList, setFriendList } = useContext(FriendsContext);
     const { messages, setMessages, conversationMeta, setConversationMeta } =
         useContext(MessagesContext);
     const messagesContainerRefs = useRef({});
@@ -49,6 +50,9 @@ export const ChatMessages = ({ onBack }) => {
 
         socket.on(SOCKET_EVENTS.DIRECT_MESSAGE, (newMessage) => {
             setMessages((prev) => mergeMessages(prev, [newMessage]));
+            // A live message is new activity: float its conversation to the top of the list and
+            // refresh the preview (mirrors the server's latest-message ordering without a refetch).
+            setFriendList((prev) => bumpConversation(prev, newMessage));
         });
         socket.on(SOCKET_EVENTS.TYPING, ({ from }) => {
             if (from === currentTab) setIsTyping(true);
@@ -65,7 +69,7 @@ export const ChatMessages = ({ onBack }) => {
             socket.off(SOCKET_EVENTS.TYPING);
             socket.off(SOCKET_EVENTS.STOP_TYPING);
         };
-    }, [setMessages, currentTab, socket]);
+    }, [setMessages, setFriendList, currentTab, socket]);
 
     // Auto-scroll to newest — but only when the current conversation gains a *newer* message
     // (a live/sent message) or the tab changes. Loading OLDER messages must NOT yank the view
@@ -157,7 +161,7 @@ export const ChatMessages = ({ onBack }) => {
                             </IconButton>
                         )}
                         <Heading fontSize="2xl" textAlign="center">
-                            {friend.username}
+                            {friend.full_name || friend.username}
                         </Heading>
                     </HStack>
 
@@ -184,7 +188,7 @@ export const ChatMessages = ({ onBack }) => {
                                     fontStyle="italic"
                                     color="gray.500"
                                 >
-                                    <Text>{friend.username} is typing</Text>
+                                    <Text>{friend.full_name || friend.username} is typing</Text>
                                     <HStack spacing="0.25rem">
                                         {[0, 1, 2].map((_, i) => (
                                             <Box

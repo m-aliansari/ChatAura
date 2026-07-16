@@ -21,7 +21,10 @@ describe("XSS — user content is escaped, not executed", () => {
         renderWithProviders(
             <SocketContext.Provider value={{ socket }}>
                 <FriendsContext.Provider
-                    value={{ friendList: [{ username: "bob", user_id: "bob-id" }] }}
+                    value={{
+                        friendList: [{ username: "bob", user_id: "bob-id" }],
+                        setFriendList: vi.fn(),
+                    }}
                 >
                     <MessagesContext.Provider
                         value={{

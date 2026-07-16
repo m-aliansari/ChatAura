@@ -1,7 +1,11 @@
 import { SOCKET_EVENTS } from "@realtime-chatapp/common";
 import type { Socket } from "socket.io";
+import { db } from "../../db/index.js";
 import { removeFriendship } from "../../db/repositories/friendships.js";
-import { deleteConversation } from "../../db/repositories/messages.js";
+import {
+    getDirectConversationId,
+    deleteConversationCascade,
+} from "../../db/repositories/conversations.js";
 
 export const handleRemoveFriend = async (
     socket: Socket,
@@ -16,16 +20,21 @@ export const handleRemoveFriend = async (
 
         const me = socket.user;
 
-        // Remove the single canonical friendship row (order-independent).
-        const { removed } = await removeFriendship(me.user_id, friend.user_id);
+        // Remove the friendship and tear down the whole conversation (messages + members + the
+        // conversation row) in ONE transaction, so the two contexts can't drift out of sync.
+        const removed = await db.transaction(async (tx) => {
+            const { removed } = await removeFriendship(me.user_id, friend.user_id, tx);
+            if (!removed) return false;
+
+            const conversationId = await getDirectConversationId(me.user_id, friend.user_id, tx);
+            if (conversationId !== undefined) await deleteConversationCascade(conversationId, tx);
+            return true;
+        });
 
         if (!removed) {
             cb({ done: false, errorMsg: "Not in your friend list" });
             return;
         }
-
-        // Delete the whole conversation (both directions) in one atomic statement.
-        await deleteConversation(me.user_id, friend.user_id);
 
         // Notify the other user live
         socket.to(friend.user_id).emit(SOCKET_EVENTS.FRIEND_REMOVED, {

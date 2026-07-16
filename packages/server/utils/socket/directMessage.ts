@@ -1,7 +1,8 @@
 import { GENERIC_ERROR, SOCKET_EVENTS } from "@realtime-chatapp/common";
 import { v4 as uuidv4 } from "uuid";
 import { areFriends } from "../../db/repositories/friendships.js";
-import { saveMessage } from "../../db/repositories/messages.js";
+import { getOrCreateDirectConversation } from "../../db/repositories/conversations.js";
+import { sendMessage } from "../../services/sendMessage.js";
 import { publishMessageSent } from "../events/messageSentSubscriber.js";
 import { toWireMessage, type WireMessage } from "./common.js";
 import type { Socket } from "socket.io";
@@ -24,15 +25,17 @@ export const handleDirectMessage = async (
             return;
         }
 
-        // Single atomic INSERT (Postgres is now the source of truth) — replaces the old
-        // non-transactional pair of Redis lPushes and the fragile dot-joined string.
-        const row = await saveMessage({
+        // Resolve (or lazily create) the direct conversation, then persist + fan the sort pointer
+        // out to its members in ONE transaction (services/sendMessage) — Postgres is the source of
+        // truth and the inbox pointer can never be left stale relative to the message.
+        const conversationId = await getOrCreateDirectConversation(from, to);
+        const row = await sendMessage({
             message_id: messageId,
-            from_user_id: from,
-            to_user_id: to,
+            conversation_id: conversationId,
+            sender_user_id: from,
             content,
         });
-        const wire = toWireMessage(row);
+        const wire = toWireMessage(row, to);
 
         // Decouple FCM: publish an event and move on — a subscriber sends the push, so
         // notification latency/errors stay off the message send path (roadmap principle 4).

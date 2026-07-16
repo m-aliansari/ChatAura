@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from "vitest";
 import type { Socket } from "socket.io";
 import { REDIS_FCM_TOKENS_PREFIX } from "../../constants/fcm.js";
-import { insertUser, befriend } from "./helpers.js";
+import { insertUser, befriend, conversationMessages } from "./helpers.js";
 
 // firebase.js require()s a gitignored service-account.json at import time, so it
 // must be mocked. This same mock is the Layer-B "Google boundary" spy.
@@ -12,7 +12,6 @@ vi.mock("../../firebase.js", () => ({
 
 const { storeFcmToken, getFcmTokens, deleteFcmToken } = await import("../../utils/fcm.js");
 const { handleDirectMessage } = await import("../../utils/socket/directMessage.js");
-const { getConversation } = await import("../../db/repositories/messages.js");
 const { initMessageSentSubscriber } = await import("../../utils/events/messageSentSubscriber.js");
 const { redisClient } = await import("../../utils/redis.js");
 
@@ -108,8 +107,8 @@ describe("handleDirectMessage persistence (Layer B)", () => {
             }),
         );
 
-        // A single canonical row (not two Redis lists) is the source of truth now.
-        const { messages } = await getConversation(from.user_id, to.user_id, { limit: 10 });
+        // A single row in Postgres is the source of truth now.
+        const messages = await conversationMessages(from.user_id, to.user_id);
         expect(messages).toHaveLength(1);
         expect(messages[0].content).toBe("hello");
     });

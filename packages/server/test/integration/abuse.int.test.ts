@@ -6,7 +6,7 @@ import { io as ioc, type Socket as ClientSocket } from "socket.io-client";
 import jwt from "jsonwebtoken";
 import { v4 as uuid } from "uuid";
 import { SOCKET_EVENTS } from "@realtime-chatapp/common";
-import { insertUser, befriend } from "./helpers.js";
+import { insertUser, befriend, conversationMessages } from "./helpers.js";
 
 const sendMock = vi.fn().mockResolvedValue("id");
 vi.mock("../../firebase.js", () => ({
@@ -16,7 +16,6 @@ vi.mock("../../firebase.js", () => ({
 const { authorizeUser } = await import("../../middlewares/socket/authorizeUser.js");
 const { initializeUser } = await import("../../utils/socket/initializeUser.js");
 const { handleDirectMessage } = await import("../../utils/socket/directMessage.js");
-const { getConversation } = await import("../../db/repositories/messages.js");
 
 let httpServer: HttpServer;
 let io: Server;
@@ -71,7 +70,7 @@ describe("authorization abuse — direct messages", () => {
         });
 
         expect(ack.done).toBe(false);
-        const { messages } = await getConversation(alice.user_id, bob.user_id, { limit: 10 });
+        const messages = await conversationMessages(alice.user_id, bob.user_id);
         expect(messages).toHaveLength(0);
         a.close();
     });
@@ -89,7 +88,7 @@ describe("authorization abuse — direct messages", () => {
         });
 
         expect(ack.done).toBe(false);
-        const { messages } = await getConversation(alice.user_id, ghost, { limit: 10 });
+        const messages = await conversationMessages(alice.user_id, ghost);
         expect(messages).toHaveLength(0);
         a.close();
     });
@@ -108,11 +107,11 @@ describe("authorization abuse — direct messages", () => {
             content: "spoof",
         });
 
-        const { messages } = await getConversation(alice.user_id, bob.user_id, { limit: 10 });
+        const messages = await conversationMessages(alice.user_id, bob.user_id);
         expect(messages).toHaveLength(1);
-        // Server derives `from` from the authenticated identity, ignoring the spoofed field.
-        expect(messages[0].from_user_id).toBe(alice.user_id);
-        expect(messages[0].from_user_id).not.toBe("victim-spoofed-id");
+        // Server derives the sender from the authenticated identity, ignoring the spoofed field.
+        expect(messages[0].sender_user_id).toBe(alice.user_id);
+        expect(messages[0].sender_user_id).not.toBe("victim-spoofed-id");
         a.close();
     });
 

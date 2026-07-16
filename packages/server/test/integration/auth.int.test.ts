@@ -40,8 +40,10 @@ const readJson = async (res: Response) =>
 describe("POST /auth/register", () => {
     it("creates a user and returns a valid JWT", async () => {
         const res = await post(API_ROUTES.AUTH.REGISTER, {
+            fullName: "Alice Adams",
             username: "alice1",
             password: "secret1",
+            confirmPassword: "secret1",
         });
         const data = await readJson(res);
 
@@ -54,8 +56,10 @@ describe("POST /auth/register", () => {
     it("rejects a duplicate username (UNIQUE constraint surfaced as 'Username taken')", async () => {
         await insertUser({ username: "bobby1" });
         const res = await post(API_ROUTES.AUTH.REGISTER, {
+            fullName: "Bobby Brown",
             username: "bobby1",
             password: "secret1",
+            confirmPassword: "secret1",
         });
         const data = await readJson(res);
         expect(data).toEqual({ loggedIn: false, status: "Username taken" });

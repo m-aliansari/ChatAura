@@ -10,6 +10,7 @@ import { v4 as uuidv4 } from "uuid";
 import { redisClient } from "../utils/redis.js";
 import { addUser, getUserByUsername } from "../db/repositories/users.js";
 import { addFriendship } from "../db/repositories/friendships.js";
+import { getOrCreateDirectConversation } from "../db/repositories/conversations.js";
 import { getHashMapKey } from "../utils/socket/common.js";
 import { jwtSignPromise } from "../utils/jwt.js";
 
@@ -23,17 +24,26 @@ async function ensureUser({
     username,
     password = "secret1",
     connected = false,
+    fullName,
 }: {
     username?: string;
     password?: string;
     connected?: boolean;
+    fullName?: string;
 }) {
     const name = username ?? uniqName();
 
     let user = await getUserByUsername(name);
     if (!user) {
         const passhash = await hash(password, 4);
-        user = await addUser({ user_id: uuidv4(), username: name, passhash });
+        // full_name defaults to the username so specs that match the list by username keep working;
+        // pass fullName explicitly to exercise the display-name rendering.
+        user = await addUser({
+            user_id: uuidv4(),
+            username: name,
+            full_name: fullName ?? name,
+            passhash,
+        });
     }
 
     await redisClient.hSet(getHashMapKey(user.username), {
@@ -49,12 +59,15 @@ async function ensureUser({
     return { username: user.username, user_id: user.user_id, id: user.id, token };
 }
 
-// Friendship in Postgres — same canonical row handleSocketAddFriend writes.
+// Friendship in Postgres — same canonical row handleSocketAddFriend writes, PLUS its direct
+// conversation. The sidebar is built from conversation_members, so a friendship without a
+// conversation would simply not render.
 async function befriend(
     a: { username: string; user_id: string },
     b: { username: string; user_id: string },
 ) {
     await addFriendship(a.user_id, b.user_id);
+    await getOrCreateDirectConversation(a.user_id, b.user_id);
 }
 
 const router = Router();
@@ -65,9 +78,24 @@ const router = Router();
 // test can open a context as either side: { a: {username,user_id,token}, b: {...} }.
 router.post("/seed-friendship", async (req, res) => {
     try {
-        const { a, b, aConnected = false, bConnected = false } = req.body ?? {};
-        const userA = await ensureUser({ username: a, connected: aConnected });
-        const userB = await ensureUser({ username: b, connected: bConnected });
+        const {
+            a,
+            b,
+            aConnected = false,
+            bConnected = false,
+            aFullName,
+            bFullName,
+        } = req.body ?? {};
+        const userA = await ensureUser({
+            username: a,
+            connected: aConnected,
+            fullName: aFullName,
+        });
+        const userB = await ensureUser({
+            username: b,
+            connected: bConnected,
+            fullName: bFullName,
+        });
         await befriend(userA, userB);
         res.json({ a: userA, b: userB });
     } catch (err) {

@@ -23,8 +23,10 @@ function renderSignup(setUser = vi.fn()) {
 }
 
 async function fillAndSubmit() {
+    await userEvent.type(screen.getByPlaceholderText("Enter your full name"), "Alice Smith");
     await userEvent.type(screen.getByPlaceholderText("Enter username"), "alice1");
     await userEvent.type(screen.getByPlaceholderText("Enter password"), "secret1");
+    await userEvent.type(screen.getByPlaceholderText("Re-enter password"), "secret1");
     await userEvent.click(screen.getByRole("button", { name: "Create Account" }));
 }
 
@@ -48,7 +50,12 @@ describe("Signup", () => {
         await waitFor(() => expect(fetchMock).toHaveBeenCalled());
         const [url, opts] = fetchMock.mock.calls[0];
         expect(url).toBe("http://localhost:3000/auth/register");
-        expect(JSON.parse(opts.body)).toEqual({ username: "alice1", password: "secret1" });
+        expect(JSON.parse(opts.body)).toEqual({
+            fullName: "Alice Smith",
+            username: "alice1",
+            password: "secret1",
+            confirmPassword: "secret1",
+        });
     });
 
     it("sets the user and navigates home on success", async () => {

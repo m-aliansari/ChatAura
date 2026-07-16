@@ -12,7 +12,7 @@ function setup({ friendList, messages }) {
     const socket = { on: vi.fn(), off: vi.fn(), emit: vi.fn() };
     renderWithProviders(
         <SocketContext.Provider value={{ socket }}>
-            <FriendsContext.Provider value={{ friendList }}>
+            <FriendsContext.Provider value={{ friendList, setFriendList: vi.fn() }}>
                 <MessagesContext.Provider
                     value={{
                         messages,
@@ -54,7 +54,7 @@ describe("ChatMessages", () => {
         const socket = { on: vi.fn(), off: vi.fn(), emit: vi.fn() };
         const { unmount } = renderWithProviders(
             <SocketContext.Provider value={{ socket }}>
-                <FriendsContext.Provider value={{ friendList: [] }}>
+                <FriendsContext.Provider value={{ friendList: [], setFriendList: vi.fn() }}>
                     <MessagesContext.Provider
                         value={{
                             messages: [],
@@ -81,7 +81,10 @@ describe("ChatMessages", () => {
         renderWithProviders(
             <SocketContext.Provider value={{ socket }}>
                 <FriendsContext.Provider
-                    value={{ friendList: [{ username: "bob", user_id: "bob-id" }] }}
+                    value={{
+                        friendList: [{ username: "bob", user_id: "bob-id" }],
+                        setFriendList: vi.fn(),
+                    }}
                 >
                     <MessagesContext.Provider
                         value={{
@@ -114,7 +117,10 @@ describe("ChatMessages", () => {
         renderWithProviders(
             <SocketContext.Provider value={{ socket }}>
                 <FriendsContext.Provider
-                    value={{ friendList: [{ username: "bob", user_id: "bob-id" }] }}
+                    value={{
+                        friendList: [{ username: "bob", user_id: "bob-id" }],
+                        setFriendList: vi.fn(),
+                    }}
                 >
                     <MessagesContext.Provider
                         value={{
@@ -149,7 +155,10 @@ describe("ChatMessages", () => {
         renderWithProviders(
             <SocketContext.Provider value={{ socket }}>
                 <FriendsContext.Provider
-                    value={{ friendList: [{ username: "bob", user_id: "bob-id" }] }}
+                    value={{
+                        friendList: [{ username: "bob", user_id: "bob-id" }],
+                        setFriendList: vi.fn(),
+                    }}
                 >
                     <MessagesContext.Provider
                         value={{
@@ -197,7 +206,10 @@ describe("ChatMessages — scroll to load older (LOAD_OLDER)", () => {
         renderWithProviders(
             <SocketContext.Provider value={{ socket }}>
                 <FriendsContext.Provider
-                    value={{ friendList: [{ username: "bob", user_id: "bob-id" }] }}
+                    value={{
+                        friendList: [{ username: "bob", user_id: "bob-id" }],
+                        setFriendList: vi.fn(),
+                    }}
                 >
                     <MessagesContext.Provider
                         value={{ messages, setMessages, conversationMeta, setConversationMeta }}

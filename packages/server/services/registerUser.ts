@@ -1,7 +1,7 @@
 import { hash } from "bcrypt";
 import { v4 as uuidv4 } from "uuid";
 import { ValidationError } from "yup";
-import { authFormSchema } from "@realtime-chatapp/common";
+import { registerCredentialsSchema } from "@realtime-chatapp/common";
 import { addUser, checkUserExists } from "../db/repositories/users.js";
 import type { User } from "../db/schema/users.js";
 
@@ -14,8 +14,9 @@ export const BCRYPT_ROUNDS = 10;
  * `addUser` and create an account that cannot log in — the credential rules are Yup-only, and
  * nothing at the DB level enforces them.
  *
- * The rule itself is NOT duplicated: this validates against the very same `authFormSchema` the
- * route middleware uses. Enforcing at several boundaries is fine; defining the rule twice is not.
+ * The rule itself is NOT duplicated: this validates against `registerCredentialsSchema`, the same
+ * source of truth the route middleware's `registerFormSchema` builds on (it just adds the form-only
+ * `confirmPassword`). Enforcing at several boundaries is fine; defining the rule twice is not.
  *
  * Returns a result union rather than throwing, so callers map outcomes to their own transport
  * (an HTTP status, a seeder error) without treating exceptions as control flow.
@@ -28,20 +29,26 @@ export type RegisterUserResult =
 export const registerUser = async (credentials: {
     username: string;
     password: string;
+    fullName: string;
 }): Promise<RegisterUserResult> => {
-    let valid: { username: string; password: string };
+    let valid: { username: string; password: string; fullName: string };
     try {
-        valid = await authFormSchema.validate(credentials);
+        valid = await registerCredentialsSchema.validate(credentials);
     } catch (error) {
         const message =
-            error instanceof ValidationError ? error.errors[0] : "Invalid username or password";
+            error instanceof ValidationError ? error.errors[0] : "Invalid registration details";
         return { ok: false, reason: "invalid", message };
     }
 
     if (await checkUserExists(valid.username)) return { ok: false, reason: "username_taken" };
 
     const passhash = await hash(valid.password, BCRYPT_ROUNDS);
-    const user = await addUser({ user_id: uuidv4(), username: valid.username, passhash });
+    const user = await addUser({
+        user_id: uuidv4(),
+        username: valid.username,
+        full_name: valid.fullName,
+        passhash,
+    });
 
     return { ok: true, user };
 };
