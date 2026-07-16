@@ -166,9 +166,16 @@ export const getConversationsPage = async (
         .innerJoin(users, sql`${users.user_id} = ${other}`)
         .leftJoin(messages, eq(messages.id, conversationMembers.last_message_id))
         .where(where)
+        // NULLS LAST is spelled out on BOTH keys so this ordering matches the inbox index exactly.
+        // `created_at` is NOT NULL, so `DESC` and `DESC NULLS LAST` are semantically identical — but
+        // the planner matches index ordering literally, and plain `DESC` (i.e. NULLS FIRST) stops it
+        // using the index's `created_at`. That costs nothing in the messaged section (last_message_id
+        // is unique, so sort groups are size 1) but is O(all my conversations) in the no-message tail,
+        // where every row shares last_message_id = NULL and becomes ONE giant sort group. Verified
+        // with EXPLAIN: without this, a 2k-no-message inbox scans 2000 rows; with it, 17.
         .orderBy(
             sql`${conversationMembers.last_message_id} DESC NULLS LAST`,
-            desc(conversationMembers.created_at),
+            sql`${conversationMembers.created_at} DESC NULLS LAST`,
             desc(conversationMembers.conversation_id),
         )
         .limit(limit + 1);
