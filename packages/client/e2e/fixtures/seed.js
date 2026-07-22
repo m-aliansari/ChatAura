@@ -27,6 +27,28 @@ export async function seedUser(request, opts = {}) {
 }
 
 /**
+ * Seeds user `a` with `count` friends in one call (each a fresh user), enough to exceed
+ * FRIENDS_PAGE_SIZE and exercise sidebar infinite scroll.
+ * @returns {Promise<{a: {username,user_id,token}, friends: Array}>}
+ */
+export async function seedFriends(request, opts = {}) {
+    const res = await request.post(`${SERVER_URL}/__test/seed-friends`, { data: opts });
+    if (!res.ok()) throw new Error(`seedFriends failed (${res.status()}): ${await res.text()}`);
+    return res.json();
+}
+
+/**
+ * Sends `count` messages from `from` to `to` in their direct conversation. `oldestMarker` sets the
+ * content of the very first (oldest) message so a test can assert it only appears after LOAD_OLDER.
+ * @returns {Promise<{conversationId: number, count: number}>}
+ */
+export async function seedMessages(request, opts = {}) {
+    const res = await request.post(`${SERVER_URL}/__test/seed-messages`, { data: opts });
+    if (!res.ok()) throw new Error(`seedMessages failed (${res.status()}): ${await res.text()}`);
+    return res.json();
+}
+
+/**
  * Opens a fresh browser context already authenticated as `user` by injecting its
  * JWT into localStorage before the app loads. Caller is responsible for closing it.
  * @returns {Promise<import("@playwright/test").BrowserContext>}

@@ -11,6 +11,7 @@ import { redisClient } from "../utils/redis.js";
 import { addUser, getUserByUsername } from "../db/repositories/users.js";
 import { addFriendship } from "../db/repositories/friendships.js";
 import { getOrCreateDirectConversation } from "../db/repositories/conversations.js";
+import { sendMessage } from "../services/sendMessage.js";
 import { getHashMapKey } from "../utils/socket/common.js";
 import { jwtSignPromise } from "../utils/jwt.js";
 
@@ -112,6 +113,58 @@ router.post("/seed-user", async (req, res) => {
         res.json(await ensureUser({ username, connected }));
     } catch (err) {
         console.error("[/__test/seed-user] failed:", err);
+        res.status(500).json({ error: "seed failed" });
+    }
+});
+
+// POST /__test/seed-friends  { a?: username, count?: number, aConnected?: boolean }
+// Gives user `a` `count` friends (each a fresh user), so a single round-trip can seed enough
+// conversations to exceed FRIENDS_PAGE_SIZE and exercise LOAD_MORE_FRIENDS. Returns
+// { a: {username,user_id,token}, friends: [...] }.
+router.post("/seed-friends", async (req, res) => {
+    try {
+        const { a, count = 18, aConnected = false } = req.body ?? {};
+        const userA = await ensureUser({ username: a, connected: aConnected });
+        const friends = [];
+        for (let i = 0; i < count; i++) {
+            const friend = await ensureUser({});
+            await befriend(userA, friend);
+            friends.push(friend);
+        }
+        res.json({ a: userA, friends });
+    } catch (err) {
+        console.error("[/__test/seed-friends] failed:", err);
+        res.status(500).json({ error: "seed failed" });
+    }
+});
+
+// POST /__test/seed-messages  { from, to: username, count?: number, oldestMarker?: string }
+// Sends `count` messages from `from` to `to` in their direct conversation, going through the real
+// sendMessage service (so last_message_id / ordering are correct). Message #1 (the oldest, lowest
+// id) gets `oldestMarker` as its content when provided — a distinctive string a test can assert is
+// only rendered after LOAD_OLDER pages past the first MESSAGES_PAGE_SIZE. Returns { conversationId }.
+router.post("/seed-messages", async (req, res) => {
+    try {
+        const { from, to, count = 35, oldestMarker } = req.body ?? {};
+        const fromUser = await getUserByUsername(from);
+        const toUser = await getUserByUsername(to);
+        if (!fromUser || !toUser) return res.status(400).json({ error: "unknown user(s)" });
+
+        const conversationId = await getOrCreateDirectConversation(
+            fromUser.user_id,
+            toUser.user_id,
+        );
+        for (let i = 1; i <= count; i++) {
+            await sendMessage({
+                message_id: uuidv4(),
+                conversation_id: conversationId,
+                sender_user_id: fromUser.user_id,
+                content: i === 1 && oldestMarker ? oldestMarker : `seed message ${i}`,
+            });
+        }
+        res.json({ conversationId, count });
+    } catch (err) {
+        console.error("[/__test/seed-messages] failed:", err);
         res.status(500).json({ error: "seed failed" });
     }
 });
