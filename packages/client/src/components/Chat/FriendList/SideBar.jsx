@@ -67,7 +67,14 @@ export const SideBar = () => {
 
     return (
         <Dialog.Root placement="center" motionPreset="slide-in-bottom">
-            <VStack h="100%" gap="0" align="stretch">
+            {/* Bind the pane to the viewport directly (like ChatMessages' `h="100dvh"`), NOT `h=100%`
+                of the parent: the desktop Grid in Home.jsx sets no grid-template-rows, so its row is
+                auto-sized and the GridItem grows to content — a `100%` here would inherit that
+                unbounded height, the list's `flex="1"` would never be capped, and the whole PAGE
+                would scroll instead of the list (which also kills LOAD_MORE_FRIENDS, since onScroll
+                is bound to the list, not the body). `overflow="hidden"` keeps the scroll inside the
+                list. */}
+            <VStack h="100dvh" overflow="hidden" gap="0" align="stretch">
                 {/* Single-row app bar: identity left, actions right. Logout lives in the account
                     menu rather than sitting in the bar — it is a rare action and should not be the
                     loudest element in the sidebar. */}
