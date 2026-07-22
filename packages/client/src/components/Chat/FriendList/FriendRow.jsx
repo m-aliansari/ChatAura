@@ -14,7 +14,7 @@ import {
     VStack,
 } from "@chakra-ui/react";
 import { MdDelete, MdMoreVert, MdNotificationsOff, MdPushPin } from "react-icons/md";
-import { useState } from "react";
+import { memo, useState } from "react";
 import { formatConversationTime } from "../../../utils/formatConversationTime.js";
 import { avatarColor } from "../../../utils/avatarColor.js";
 import { RemoveFriendDialog } from "../RemoveFriendDialog.jsx";
@@ -33,7 +33,13 @@ import { RemoveFriendDialog } from "../RemoveFriendDialog.jsx";
  * The rail's two lines mirror the middle column: "who + how many" above, "what + when" below —
  * the timestamp describes the last message, and the preview *is* the last message.
  */
-export const FriendRow = ({ friend }) => {
+// Memoized: a conversation switch re-renders the whole sidebar tree (useTabs value change + the
+// mark-read setFriendList), but only the friend whose data changed needs to re-render. The
+// setFriendList updaters keep the SAME object reference for untouched rows, so the default shallow
+// prop compare skips them — cutting a 40-row sidebar re-render down to the 1-2 rows that changed.
+// The selected-row highlight still updates because Tabs.Trigger reads the tabs machine via context,
+// which re-renders context consumers independently of this memo boundary.
+export const FriendRow = memo(function FriendRow({ friend }) {
     const [confirmOpen, setConfirmOpen] = useState(false);
 
     // Display name replaces the username in the list (older accounts fall back to their username).
@@ -214,4 +220,4 @@ export const FriendRow = ({ friend }) => {
             <RemoveFriendDialog friend={friend} open={confirmOpen} onOpenChange={setConfirmOpen} />
         </Box>
     );
-};
+});
