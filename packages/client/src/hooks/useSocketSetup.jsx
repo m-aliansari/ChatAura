@@ -44,14 +44,17 @@ export const useSocketSetup = (tabs) => {
         });
 
         socket.on(SOCKET_EVENTS.CONNECTION_STATUS_CHANGED, (status, username) => {
-            setFriendList((prevFriends) => {
-                return prevFriends.map((friend) => {
-                    if (friend.username === username) {
-                        friend.connected = status;
-                    }
-                    return friend;
-                });
-            });
+            // Immutable update: replace the changed friend with a NEW object rather than mutating
+            // `friend.connected` in place. The old in-place mutation returned the same reference, so
+            // a memoized FriendRow (which compares the `friend` prop by reference) would skip the
+            // re-render and the presence dot would stay stale. Spreading gives the one changed row a
+            // new reference (so it re-renders) while every other row keeps its reference (so memo
+            // still skips them).
+            setFriendList((prevFriends) =>
+                prevFriends.map((friend) =>
+                    friend.username === username ? { ...friend, connected: status } : friend,
+                ),
+            );
         });
 
         socket.on(SOCKET_EVENTS.CONNECTION_ERROR, (e) => {
