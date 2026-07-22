@@ -30,7 +30,14 @@ test("when a friend is removed, both users' friend lists update in realtime", as
     await expect(pageB.getByRole("tab", { name: a.username })).toBeVisible();
 
     await test.step("userA removes userB as a friend", async () => {
-        await pageA.getByRole("button", { name: `Remove ${b.username}` }).click();
+        // Removal now lives behind the row's overflow menu (revealed on hover), so pin/mute can
+        // join it later without the row carrying a permanent destructive button.
+        await pageA.getByRole("tab", { name: b.username }).hover();
+        await pageA
+            .getByRole("button", { name: `Conversation options for ${b.username}` })
+            .first()
+            .click();
+        await pageA.getByRole("menuitem", { name: `Remove ${b.username}` }).click();
 
         const dialog = pageA.getByRole("dialog", { name: `Remove ${b.username}?` });
         await expect(dialog).toBeVisible();
@@ -74,7 +81,10 @@ test("Friends' statuses update in realtime", async ({ request, openAppAs }) => {
     await expect(userBTab.locator("[data-status]")).toHaveAttribute("data-status", "online");
 
     await test.step("userB appears offline when he logs out", async () => {
-        await pageC.getByRole("button", { name: "Logout" }).click();
+        // Logout moved into the sidebar account menu — it is a rare action and no longer competes
+        // for attention in the header bar.
+        await pageC.getByRole("button", { name: "Account" }).click();
+        await pageC.getByRole("menuitem", { name: "Logout" }).click();
         await expect(userBTab.locator("[data-status]")).toHaveAttribute("data-status", "offline");
     });
 });

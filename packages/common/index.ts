@@ -20,6 +20,7 @@ export const SOCKET_EVENTS = {
     STOP_TYPING: "stop_typing",
     REMOVE_FRIEND: "remove_friend",
     FRIEND_REMOVED: "friend_removed",
+    MARK_READ: "mark_read",
 } as const;
 
 export const API_ROUTES = {

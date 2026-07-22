@@ -1,7 +1,19 @@
-import { Button, Heading, HStack, VStack, Separator, Tabs, Dialog } from "@chakra-ui/react";
+import {
+    Box,
+    Dialog,
+    HStack,
+    IconButton,
+    Menu,
+    Portal,
+    Separator,
+    Spacer,
+    Tabs,
+    Text,
+    VStack,
+} from "@chakra-ui/react";
 import "../../../styles/scrollbar.css";
 
-import { MdAdd } from "react-icons/md";
+import { MdAccountCircle, MdAdd, MdDarkMode, MdLightMode, MdLogout } from "react-icons/md";
 import { SOCKET_EVENTS } from "@realtime-chatapp/common";
 import { FriendsContext } from "../../../contexts/Friends/FriendsContext";
 import { SocketContext } from "../../../contexts/Socket/SocketContext.js";
@@ -12,12 +24,14 @@ import { FriendRow } from "./FriendRow.jsx";
 import { FlatLogo } from "../../common/Logo/FlatLogo.jsx";
 import { ScrollLoader } from "../../common/ScrollLoader.jsx";
 import { useLogout } from "../../../hooks/useLogout.jsx";
+import { useColorMode } from "../../ui/color-mode.jsx";
 import { mergeMessages } from "../../../utils/mergeMessages.js";
 
 export const SideBar = () => {
     const { friendList, setFriendList, friendsMeta, setFriendsMeta } = useContext(FriendsContext);
     const { socket } = useContext(SocketContext);
     const { setMessages } = useContext(MessagesContext);
+    const { colorMode, toggleColorMode } = useColorMode();
     const logout = useLogout();
 
     // Ref mirror of friendsMeta so the scroll handler reads the latest without stale closures.
@@ -53,36 +67,70 @@ export const SideBar = () => {
 
     return (
         <Dialog.Root placement="center" motionPreset="slide-in-bottom">
-            <VStack py="1.4rem">
-                <FlatLogo width="150px" />
-                <HStack justify="center" gap="15px" w="100%" flexWrap="wrap" px="0.5rem">
-                    <Heading size={{ base: "sm", md: "md" }}>Add Friend</Heading>
+            <VStack h="100%" gap="0" align="stretch">
+                {/* Single-row app bar: identity left, actions right. Logout lives in the account
+                    menu rather than sitting in the bar — it is a rare action and should not be the
+                    loudest element in the sidebar. */}
+                <HStack px="3" py="2.5" gap="2">
+                    <FlatLogo width="120px" />
+                    <Spacer />
                     <Dialog.Trigger asChild>
-                        <Button variant="surface" aria-label="Add Friend">
-                            <MdAdd size={10} />
-                        </Button>
+                        <IconButton variant="ghost" size="sm" aria-label="Add Friend">
+                            <MdAdd />
+                        </IconButton>
                     </Dialog.Trigger>
-                    <Button variant="outline" colorPalette="red" size="sm" onClick={logout}>
-                        Logout
-                    </Button>
+                    <Menu.Root lazyMount unmountOnExit>
+                        <Menu.Trigger asChild>
+                            <IconButton variant="ghost" size="sm" aria-label="Account">
+                                <MdAccountCircle />
+                            </IconButton>
+                        </Menu.Trigger>
+                        <Portal>
+                            <Menu.Positioner>
+                                <Menu.Content>
+                                    <Menu.Item value="theme" onSelect={toggleColorMode}>
+                                        {colorMode === "dark" ? <MdLightMode /> : <MdDarkMode />}
+                                        <Box flex="1">
+                                            {colorMode === "dark" ? "Light mode" : "Dark mode"}
+                                        </Box>
+                                    </Menu.Item>
+                                    <Menu.Separator />
+                                    <Menu.Item
+                                        value="logout"
+                                        color="fg.error"
+                                        _hover={{ bg: "bg.error", color: "fg.error" }}
+                                        onSelect={logout}
+                                    >
+                                        <MdLogout />
+                                        <Box flex="1">Logout</Box>
+                                    </Menu.Item>
+                                </Menu.Content>
+                            </Menu.Positioner>
+                        </Portal>
+                    </Menu.Root>
                 </HStack>
                 <Separator />
+
                 {friendList?.length ? (
                     <>
+                        {/* Flat and edge-to-edge: no container of its own. The pane already has a
+                            border; a second card inside it read as two competing surfaces. */}
                         <VStack
                             as={Tabs.List}
                             w="100%"
-                            p={{ base: "1rem", md: "2rem" }}
-                            maxH="82vh"
+                            gap="0"
+                            align="stretch"
+                            p="0"
+                            flex="1"
+                            minH="0"
+                            // The `enclosed` Tabs.List recipe paints bg.muted — the same "second
+                            // surface inside the pane" the gradient card was creating. It also
+                            // collides with the selected row's own bg.muted fill, which would make
+                            // selection invisible. Rows sit directly on the pane background.
+                            bg="transparent"
                             overflowY="auto"
                             onScroll={handleScroll}
                             data-testid="friends-scroll"
-                            backgroundImage={{
-                                base: "linear-gradient(to right, #f5f5f5, #e0e0e0)", // light gray gradient for light mode
-                                _dark: "linear-gradient(to right, #131313ff, #4a4a4a)", // dark gray gradient for dark mode
-                            }}
-                            borderRadius="12px" /* Rounded corners for a card-like design */
-                            boxShadow="lg" /* Soft shadow for a modern look */
                         >
                             {friendList.map((friend) => (
                                 <FriendRow key={friend.user_id} friend={friend} />
@@ -93,7 +141,12 @@ export const SideBar = () => {
                         {friendsMeta.loading && <ScrollLoader label="Loading more friends…" />}
                     </>
                 ) : (
-                    <></>
+                    <VStack flex="1" justify="center" px="6" gap="1" textAlign="center">
+                        <Text fontWeight="medium">No conversations yet</Text>
+                        <Text fontSize="sm" color="fg.muted">
+                            Add a friend to start chatting.
+                        </Text>
+                    </VStack>
                 )}
             </VStack>
             <AddFriendModal />

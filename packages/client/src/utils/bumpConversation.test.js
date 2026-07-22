@@ -37,4 +37,32 @@ describe("bumpConversation", () => {
         expect(bumpConversation(list, { content: "x" })).toBe(list);
         expect(bumpConversation(list, null)).toBe(list);
     });
+
+    describe("unread", () => {
+        const msg = { conversationId: 3, content: "new c", createdAt: "t9" };
+
+        it("does not touch the count by default — the send-ack path must never self-mark unread", () => {
+            expect(bumpConversation(list, msg)[0].unreadCount).toBeUndefined();
+        });
+
+        it("starts the count at 1 for a conversation that had none", () => {
+            expect(bumpConversation(list, msg, { incrementUnread: true })[0].unreadCount).toBe(1);
+        });
+
+        it("increments an existing count", () => {
+            const withUnread = list.map((f) =>
+                f.conversationId === 3 ? { ...f, unreadCount: 4 } : f,
+            );
+            expect(
+                bumpConversation(withUnread, msg, { incrementUnread: true })[0].unreadCount,
+            ).toBe(5);
+        });
+
+        it("only affects the conversation the message belongs to", () => {
+            const result = bumpConversation(list, msg, { incrementUnread: true });
+            expect(result.filter((f) => f.conversationId !== 3).every((f) => !f.unreadCount)).toBe(
+                true,
+            );
+        });
+    });
 });

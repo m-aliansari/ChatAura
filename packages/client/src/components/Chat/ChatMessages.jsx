@@ -1,22 +1,13 @@
-import {
-    Box,
-    Heading,
-    HStack,
-    IconButton,
-    Tabs,
-    Text,
-    useTabsContext,
-    VStack,
-} from "@chakra-ui/react";
-import { MdArrowBack } from "react-icons/md";
+import { Box, HStack, Tabs, Text, useTabsContext, VStack } from "@chakra-ui/react";
 import { FriendsContext } from "../../contexts/Friends/FriendsContext.js";
-import { useContext, useEffect, useRef, useState } from "react";
+import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { MessagesContext } from "../../contexts/Messages/MessagesContext.js";
 import { ChatBox } from "./ChatBox.jsx";
 import { SOCKET_EVENTS } from "@realtime-chatapp/common";
 import { keyframes } from "@emotion/react";
 import { SocketContext } from "../../contexts/Socket/SocketContext.js";
 import { ScrollLoader } from "../common/ScrollLoader.jsx";
+import { ChatHeader } from "./ChatHeader.jsx";
 import { mergeMessages } from "../../utils/mergeMessages.js";
 import { bumpConversation } from "../../utils/bumpConversation.js";
 
@@ -52,7 +43,13 @@ export const ChatMessages = ({ onBack }) => {
             setMessages((prev) => mergeMessages(prev, [newMessage]));
             // A live message is new activity: float its conversation to the top of the list and
             // refresh the preview (mirrors the server's latest-message ordering without a refetch).
-            setFriendList((prev) => bumpConversation(prev, newMessage));
+            // It only counts as unread if the user is not currently looking at that conversation —
+            // if they are, the mark-read effect below immediately advances the pointer anyway.
+            setFriendList((prev) =>
+                bumpConversation(prev, newMessage, {
+                    incrementUnread: newMessage.from !== currentTab,
+                }),
+            );
         });
         socket.on(SOCKET_EVENTS.TYPING, ({ from }) => {
             if (from === currentTab) setIsTyping(true);
@@ -71,6 +68,18 @@ export const ChatMessages = ({ onBack }) => {
         };
     }, [setMessages, setFriendList, currentTab, socket]);
 
+    // Newest message id in the open conversation. Shared by auto-scroll (below) and mark-read
+    // (further below) — both need exactly this number, so it is computed once.
+    const newestId = useMemo(
+        () =>
+            messages.reduce(
+                (max, m) =>
+                    m.to === currentTab || m.from === currentTab ? Math.max(max, m.id) : max,
+                0,
+            ),
+        [messages, currentTab],
+    );
+
     // Auto-scroll to newest — but only when the current conversation gains a *newer* message
     // (a live/sent message) or the tab changes. Loading OLDER messages must NOT yank the view
     // back to the bottom, or infinite scroll is unusable.
@@ -80,10 +89,6 @@ export const ChatMessages = ({ onBack }) => {
         const el = messagesContainerRefs.current?.[currentTab];
         if (!el) return;
 
-        const newestId = messages.reduce(
-            (max, m) => (m.to === currentTab || m.from === currentTab ? Math.max(max, m.id) : max),
-            0,
-        );
         const tabChanged = lastTabRef.current !== currentTab;
         lastTabRef.current = currentTab;
 
@@ -91,7 +96,34 @@ export const ChatMessages = ({ onBack }) => {
             el.scrollTo({ top: 0, behavior: tabChanged ? "auto" : "smooth" });
         }
         newestIdRef.current = newestId;
-    }, [messages, currentTab]);
+    }, [newestId, currentTab]);
+
+    // Mark the open conversation read: advance the server-side pointer and clear the local badge.
+    // The server write is GREATEST-based, so re-emitting is harmless — but the ref guard keeps us
+    // from emitting on every unrelated `messages` change.
+    const lastMarkedRef = useRef({});
+    useEffect(() => {
+        if (!currentTab || !newestId) return;
+
+        const friend = friendList.find((f) => f.user_id === currentTab);
+        if (!friend?.conversationId) return;
+        if ((lastMarkedRef.current[currentTab] ?? 0) >= newestId) return;
+        lastMarkedRef.current[currentTab] = newestId;
+
+        socket.emit(SOCKET_EVENTS.MARK_READ, {
+            conversationId: friend.conversationId,
+            messageId: newestId,
+        });
+
+        // Optimistic — the badge clears immediately. If the emit never lands, the count simply
+        // reappears on the next load, which is the correct failure mode for a read receipt.
+        // Returning `prev` unchanged when there is nothing to clear avoids a needless re-render.
+        setFriendList((prev) =>
+            prev.some((f) => f.user_id === currentTab && f.unreadCount)
+                ? prev.map((f) => (f.user_id === currentTab ? { ...f, unreadCount: 0 } : f))
+                : prev,
+        );
+    }, [currentTab, newestId, friendList, socket, setFriendList]);
 
     // Fetch the previous page of a conversation when the user scrolls to the oldest message.
     const loadOlder = (friendUserId) => {
@@ -147,23 +179,7 @@ export const ChatMessages = ({ onBack }) => {
                     p="0"
                     spacing="0"
                 >
-                    {/* Fixed Heading (with a back button on mobile) */}
-                    <HStack w="100%" p="1rem" justify="center" position="relative">
-                        {onBack && (
-                            <IconButton
-                                aria-label="Back to friends"
-                                variant="ghost"
-                                onClick={onBack}
-                                position="absolute"
-                                left="0.5rem"
-                            >
-                                <MdArrowBack />
-                            </IconButton>
-                        )}
-                        <Heading fontSize="2xl" textAlign="center">
-                            {friend.full_name || friend.username}
-                        </Heading>
-                    </HStack>
+                    <ChatHeader friend={friend} onBack={onBack} />
 
                     {/* Scrollable Messages */}
                     <Box

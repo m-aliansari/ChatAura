@@ -36,6 +36,13 @@
       "when": 1784159514816,
       "tag": "0004_hard_trish_tilby",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1784479920857,
+      "tag": "0005_luxuriant_master_chief",
+      "breakpoints": true
     }
   ]
 }
