@@ -8,6 +8,7 @@ import {
     getDirectConversationId,
     getConversationsPage,
     deleteConversationCascade,
+    markConversationRead,
 } from "../../db/repositories/conversations.js";
 import { getConversation, saveMessage } from "../../db/repositories/messages.js";
 import { sendMessage } from "../../services/sendMessage.js";
@@ -203,6 +204,119 @@ describe("conversations repository (integration)", () => {
         expect(new Set(walked).size).toBe(expected.length);
         // ...and the walk really did exercise the no-message-tail cursor branch.
         expect(sawNullCursor).toBe(true);
+    });
+
+    describe("unread", () => {
+        // Small helper: the unread count for `viewer` in the conversation with `partnerUsername`.
+        const unreadFor = async (viewerId: string, partnerUsername: string) => {
+            const { conversations } = await getConversationsPage(viewerId, { limit: 20 });
+            return conversations.find((c) => c.username === partnerUsername)?.unreadCount;
+        };
+
+        it("counts only the OTHER party's messages newer than the read pointer", async () => {
+            const me = await insertUser({ username: "unreadme" });
+            const them = await insertUser({ username: "unreadthem" });
+            const cid = await getOrCreateDirectConversation(me.user_id, them.user_id);
+
+            expect(await unreadFor(me.user_id, "unreadthem")).toBe(0);
+
+            // Two from them, one from me. Only theirs count.
+            for (const content of ["a", "b"]) {
+                await sendMessage({
+                    message_id: uuid(),
+                    conversation_id: cid,
+                    sender_user_id: them.user_id,
+                    content,
+                });
+            }
+            const mine = await sendMessage({
+                message_id: uuid(),
+                conversation_id: cid,
+                sender_user_id: me.user_id,
+                content: "from me",
+            });
+
+            expect(await unreadFor(me.user_id, "unreadthem")).toBe(2);
+            // ...and my own messages are unread for THEM, symmetrically.
+            expect(await unreadFor(them.user_id, "unreadme")).toBe(1);
+
+            // Reading up to my own latest clears everything older, including their two.
+            await markConversationRead(cid, me.user_id, mine.id);
+            expect(await unreadFor(me.user_id, "unreadthem")).toBe(0);
+            // Their side is untouched — the pointer is per-member, not per-conversation.
+            expect(await unreadFor(them.user_id, "unreadme")).toBe(1);
+        });
+
+        it("counts messages that arrive after the pointer was advanced", async () => {
+            const me = await insertUser({ username: "unreadme2" });
+            const them = await insertUser({ username: "unreadthem2" });
+            const cid = await getOrCreateDirectConversation(me.user_id, them.user_id);
+
+            const first = await sendMessage({
+                message_id: uuid(),
+                conversation_id: cid,
+                sender_user_id: them.user_id,
+                content: "one",
+            });
+            await markConversationRead(cid, me.user_id, first.id);
+            expect(await unreadFor(me.user_id, "unreadthem2")).toBe(0);
+
+            await sendMessage({
+                message_id: uuid(),
+                conversation_id: cid,
+                sender_user_id: them.user_id,
+                content: "two",
+            });
+            expect(await unreadFor(me.user_id, "unreadthem2")).toBe(1);
+        });
+
+        it("markConversationRead is idempotent and never moves the pointer backwards", async () => {
+            // This is the property the whole pointer-over-counter decision rests on: the write must
+            // survive replay and out-of-order delivery from a future queue.
+            const me = await insertUser({ username: "unreadme3" });
+            const them = await insertUser({ username: "unreadthem3" });
+            const cid = await getOrCreateDirectConversation(me.user_id, them.user_id);
+
+            const m1 = await sendMessage({
+                message_id: uuid(),
+                conversation_id: cid,
+                sender_user_id: them.user_id,
+                content: "one",
+            });
+            const m2 = await sendMessage({
+                message_id: uuid(),
+                conversation_id: cid,
+                sender_user_id: them.user_id,
+                content: "two",
+            });
+
+            // Replaying the same mark is a no-op.
+            await markConversationRead(cid, me.user_id, m2.id);
+            await markConversationRead(cid, me.user_id, m2.id);
+            expect(await unreadFor(me.user_id, "unreadthem3")).toBe(0);
+
+            // An OLDER mark arriving late must not resurrect the unread count.
+            await markConversationRead(cid, me.user_id, m1.id);
+            expect(await unreadFor(me.user_id, "unreadthem3")).toBe(0);
+        });
+
+        it("markConversationRead only touches the caller's own member row", async () => {
+            const me = await insertUser({ username: "unreadme4" });
+            const them = await insertUser({ username: "unreadthem4" });
+            const other = await insertUser({ username: "unreadother4" });
+            const cid = await getOrCreateDirectConversation(me.user_id, them.user_id);
+
+            const m = await sendMessage({
+                message_id: uuid(),
+                conversation_id: cid,
+                sender_user_id: them.user_id,
+                content: "hello",
+            });
+
+            // A third party naming someone else's conversation updates nothing.
+            await markConversationRead(cid, other.user_id, m.id);
+            expect(await unreadFor(me.user_id, "unreadthem4")).toBe(1);
+        });
     });
 
     it("deleteConversationCascade removes the messages, members and the conversation row", async () => {

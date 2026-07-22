@@ -4,7 +4,7 @@ import { register, loginAs, uniq } from "./fixtures/auth.js";
 test("a new user can register and reach the authenticated home (full stack)", async ({ page }) => {
     await register(page, uniq("solo"));
     // Sidebar controls render -> client+server+Postgres+JWT+socket all wired.
-    await expect(page.getByRole("button", { name: "Logout" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Account", exact: true })).toBeVisible();
 });
 
 test("an existing user can log in", async ({ browser }) => {
@@ -20,7 +20,7 @@ test("an existing user can log in", async ({ browser }) => {
     const ctx2 = await browser.newContext();
     const p2 = await ctx2.newPage();
     await loginAs(p2, username);
-    await expect(p2.getByRole("heading", { name: "Add Friend" })).toBeVisible();
+    await expect(p2.getByRole("button", { name: "Account", exact: true })).toBeVisible();
     await ctx2.close();
 });
 
@@ -31,5 +31,5 @@ test("invalid login shows an error and stays on the login page", async ({ page }
     await page.getByRole("button", { name: "Log In" }).click();
 
     await expect(page.getByText("Wrong username or password!")).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Add Friend" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Account", exact: true })).toHaveCount(0);
 });

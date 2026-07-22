@@ -1,4 +1,5 @@
-import { and, desc, eq, isNull, lt, or, sql } from "drizzle-orm";
+import { and, count, desc, eq, gt, isNull, lt, ne, or, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { db } from "../index.js";
 import { conversations } from "../schema/conversations.js";
 import { conversationMembers } from "../schema/conversationMembers.js";
@@ -96,6 +97,31 @@ export const bumpConversationLastMessage = async (
         .where(eq(conversationMembers.conversation_id, conversationId));
 };
 
+/**
+ * Advance one member's read pointer. `GREATEST` is the whole point: the write is idempotent and
+ * commutative, so replaying it — a second device, a reconnect, or a broker redelivering the same
+ * event — can never move the pointer backwards or double-count. Applying an older id is a no-op.
+ * Scoped to the caller's own member row, so a user can only mark their own side read.
+ */
+export const markConversationRead = async (
+    conversationId: number,
+    userId: string,
+    messageId: number,
+    executor: Executor = db,
+): Promise<void> => {
+    await executor
+        .update(conversationMembers)
+        .set({
+            last_read_message_id: sql`GREATEST(COALESCE(${conversationMembers.last_read_message_id}, 0), ${messageId})`,
+        })
+        .where(
+            and(
+                eq(conversationMembers.conversation_id, conversationId),
+                eq(conversationMembers.user_id, userId),
+            ),
+        );
+};
+
 /** Delete a conversation and everything hanging off it (messages + members), explicitly (no FK). */
 export const deleteConversationCascade = async (
     conversationId: number,
@@ -126,6 +152,9 @@ export type InboxConversation = {
     username: string;
     full_name: string;
     lastMessage: { content: string; createdAt: string } | null;
+    // Messages in this conversation newer than my read pointer, not sent by me. DERIVED, never
+    // stored — see `last_read_message_id` in the schema for why a counter column was rejected.
+    unreadCount: number;
 };
 
 /**
@@ -145,6 +174,40 @@ export const getConversationsPage = async (
 }> => {
     const other = sql`CASE WHEN ${conversations.user_a_id} = ${userId} THEN ${conversations.user_b_id} ELSE ${conversations.user_a_id} END`;
     const mine = eq(conversationMembers.user_id, userId);
+
+    // Unread count, as a correlated subquery in the SELECT list. The alias is needed because
+    // `messages` is already joined in the outer query for the preview.
+    //
+    // This does NOT violate the "no query-time LATERAL" rule in CLAUDE.md — that rule protects the
+    // SORT KEY, which must stay co-located with the membership filter. A SELECT-list subquery runs
+    // only on rows the keyset has ALREADY chosen, so it cannot influence index selection for
+    // ordering, and it executes at most `limit + 1` times. Each execution is an index-only-ish scan
+    // on messages_conversation_id_id_idx (conversation_id, id) — the same index history pagination
+    // uses, so no new index is needed. Re-check with EXPLAIN ANALYZE if you touch this.
+    //
+    // Built with the query builder, not a raw SQL string: the builder is what makes `alias()` emit
+    // a real `FROM "messages" "unread"` clause. Interpolating an aliased table into a raw `sql`
+    // template instead renders the bare alias name (`FROM "unread"` — no such relation).
+    //
+    // COALESCE is the one part left in `sql`: Drizzle defines no builder for it. The obvious pure
+    // builder alternative — `or(isNull(last_read), gt(id, last_read))` — is NOT equivalent for the
+    // planner. Measured with EXPLAIN ANALYZE:
+    //   COALESCE -> Index Cond: (conversation_id = ... AND id > COALESCE(last_read, 0))
+    //   OR       -> Index Cond: (conversation_id = ...)   + Filter: (last_read IS NULL OR id > ...)
+    // i.e. the OR demotes the `id >` term out of the index condition, so the subquery reads EVERY
+    // message in the conversation and filters in memory instead of range-scanning from the read
+    // pointer. Invisible on small conversations, linear in history on large ones. Keep the COALESCE.
+    const unread = alias(messages, "unread");
+    const unreadCount = db
+        .select({ value: count() })
+        .from(unread)
+        .where(
+            and(
+                eq(unread.conversation_id, conversationMembers.conversation_id),
+                ne(unread.sender_user_id, userId),
+                gt(unread.id, sql`COALESCE(${conversationMembers.last_read_message_id}, 0)`),
+            ),
+        );
 
     // Keyset condition. When the cursor still has a last_message_id we are in the messaged section
     // (ids are globally unique, so a strict `<` needs no tiebreak; null rows all sort after and are
@@ -176,6 +239,9 @@ export const getConversationsPage = async (
             full_name: users.full_name,
             lastContent: messages.content,
             lastCreatedAt: messages.created_at,
+            // `.getSQL()` unwraps the builder into its SQL; the parens make it a scalar subquery
+            // expression in the SELECT list.
+            unreadCount: sql<number>`(${unreadCount.getSQL()})`.mapWith(Number),
         })
         .from(conversationMembers)
         .innerJoin(conversations, eq(conversations.id, conversationMembers.conversation_id))
@@ -218,6 +284,7 @@ export const getConversationsPage = async (
                 r.lastContent !== null && r.lastCreatedAt !== null
                     ? { content: r.lastContent, createdAt: r.lastCreatedAt.toISOString() }
                     : null,
+            unreadCount: r.unreadCount,
         })),
         hasMore,
         cursor,

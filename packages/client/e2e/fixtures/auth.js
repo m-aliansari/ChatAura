@@ -22,7 +22,7 @@ export async function register(page, username, password = "secret1", fullName = 
     await page.getByPlaceholder("Enter password", { exact: true }).fill(password);
     await page.getByPlaceholder("Re-enter password").fill(password);
     await page.getByRole("button", { name: "Create Account" }).click();
-    await expect(page.getByRole("heading", { name: "Add Friend" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Account", exact: true })).toBeVisible();
 }
 
 /** Logs an existing user in through the UI and lands on the authenticated home. */
@@ -31,5 +31,5 @@ export async function loginAs(page, username, password = "secret1") {
     await page.getByPlaceholder("Enter username").fill(username);
     await page.getByPlaceholder("Enter password", { exact: true }).fill(password);
     await page.getByRole("button", { name: "Log In" }).click();
-    await expect(page.getByRole("heading", { name: "Add Friend" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Account", exact: true })).toBeVisible();
 }

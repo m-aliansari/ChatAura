@@ -1,133 +1,223 @@
 import {
-    Button,
+    Avatar,
+    Badge,
+    Box,
     Circle,
-    CloseButton,
-    Dialog,
+    Float,
     HStack,
+    Icon,
     IconButton,
+    Menu,
     Portal,
     Tabs,
     Text,
     VStack,
-    useTabsContext,
 } from "@chakra-ui/react";
-import { MdDelete } from "react-icons/md";
-import { useContext, useState } from "react";
-import { SOCKET_EVENTS } from "@realtime-chatapp/common";
-import { SocketContext } from "../../../contexts/Socket/SocketContext.js";
-import { FriendsContext } from "../../../contexts/Friends/FriendsContext.js";
-import { MessagesContext } from "../../../contexts/Messages/MessagesContext.js";
+import { MdDelete, MdMoreVert, MdNotificationsOff, MdPushPin } from "react-icons/md";
+import { memo, useState } from "react";
 import { formatConversationTime } from "../../../utils/formatConversationTime.js";
+import { avatarColor } from "../../../utils/avatarColor.js";
+import { RemoveFriendDialog } from "../RemoveFriendDialog.jsx";
 
-export const FriendRow = ({ friend }) => {
-    const { socket } = useContext(SocketContext);
-    const { setFriendList } = useContext(FriendsContext);
-    const { setMessages } = useContext(MessagesContext);
-    const tabs = useTabsContext();
-    const [open, setOpen] = useState(false);
+/**
+ * One conversation in the inbox. Four states share the row, each on its own visual channel so they
+ * can co-occur without fighting:
+ *
+ *   online    -> dot badge on the avatar corner (costs zero horizontal space)
+ *   unread    -> bold name + full-contrast preview + accent time + count badge (four cues, so it
+ *                does not depend on color alone)
+ *   selected  -> accent left bar + muted fill (STRUCTURAL, deliberately a different channel from
+ *                unread, so a row can be selected and unread at once)
+ *   pin/mute  -> glyphs in the right rail (rendered when the flags exist; no behavior yet)
+ *
+ * The rail's two lines mirror the middle column: "who + how many" above, "what + when" below —
+ * the timestamp describes the last message, and the preview *is* the last message.
+ */
+// Memoized: a conversation switch re-renders the whole sidebar tree (useTabs value change + the
+// mark-read setFriendList), but only the friend whose data changed needs to re-render. The
+// setFriendList updaters keep the SAME object reference for untouched rows, so the default shallow
+// prop compare skips them — cutting a 40-row sidebar re-render down to the 1-2 rows that changed.
+// The selected-row highlight still updates because Tabs.Trigger reads the tabs machine via context,
+// which re-renders context consumers independently of this memo boundary.
+export const FriendRow = memo(function FriendRow({ friend }) {
+    const [confirmOpen, setConfirmOpen] = useState(false);
 
     // Display name replaces the username in the list (older accounts fall back to their username).
     const displayName = friend.full_name || friend.username;
     const preview = friend.lastMessage?.content ?? "";
     const time = formatConversationTime(friend.lastMessage?.createdAt);
-
-    const handleRemove = () => {
-        socket.emit(
-            SOCKET_EVENTS.REMOVE_FRIEND,
-            { username: friend.username, user_id: friend.user_id },
-            ({ done }) => {
-                if (done) {
-                    setFriendList((list) => list.filter((f) => f.user_id !== friend.user_id));
-                    setMessages((msgs) =>
-                        msgs.filter((m) => m.to !== friend.user_id && m.from !== friend.user_id),
-                    );
-                    if (tabs.value === friend.user_id) tabs.setValue(null);
-                }
-                setOpen(false);
-            },
-        );
-    };
+    const unread = friend.unreadCount ?? 0;
+    const palette = avatarColor(friend.user_id);
 
     return (
-        <HStack w="100%" justify="space-between" gap="2">
-            <HStack as={Tabs.Trigger} value={friend.user_id} flex="1" minW="0" gap="3" py="2">
-                {/* Subtle presence dot (green online / muted offline) — no avatar/display picture.
-                    `data-status` is the stable hook the realtime-presence E2E test asserts on. */}
-                <Circle
-                    data-status={friend.connected ? "online" : "offline"}
-                    aria-label={`${displayName} is ${friend.connected ? "online" : "offline"}`}
-                    bg={friend.connected ? "green.400" : { base: "gray.400", _dark: "gray.600" }}
-                    w="10px"
-                    h="10px"
-                    flexShrink="0"
-                />
-                <VStack flex="1" minW="0" gap="0" align="start">
-                    <Text truncate w="100%" fontWeight="semibold" textAlign="left">
-                        {displayName}
-                    </Text>
-                    {preview && (
+        // `className="group"` (not role="group") is what Chakra's `_groupHover` compiles against —
+        // it emits a `.group:hover &` selector. role="group" would also be invalid here: a
+        // `tablist` must contain tabs, not grouping elements.
+        <Box position="relative" w="100%" className="group">
+            <HStack
+                as={Tabs.Trigger}
+                value={friend.user_id}
+                w="100%"
+                gap="3"
+                align="center"
+                textAlign="left"
+                px="3"
+                py="2.5"
+                // The Tabs.Trigger recipe hard-codes height: 40px (it is built for a tab strip, not
+                // a list row). Without this override the row clamps to 40px and the 48px avatar
+                // spills into the neighbouring rows.
+                h="auto"
+                minH="72px"
+                // Space reserved for the overflow menu so it never overlaps the rail. Reserving is
+                // deliberately preferred over an on-hover swap: nothing shifts, and the unread badge
+                // never disappears under the menu button.
+                pe="2.5rem"
+                borderRadius="0"
+                position="relative"
+                transition="background 0.15s ease"
+                _hover={{ bg: "bg.subtle" }}
+                // The accent bar is a pseudo-element so it costs no layout and cannot shift the row.
+                _before={{
+                    content: '""',
+                    position: "absolute",
+                    insetStart: 0,
+                    top: 0,
+                    bottom: 0,
+                    width: "3px",
+                    // Explicit accent, not `colorPalette.solid`: the trigger sets no colorPalette
+                    // (the per-user one lives on the Avatar), so that token would fall back to the
+                    // theme default and render a grey bar. Matches the unread accent below.
+                    bg: "blue.solid",
+                    opacity: 0,
+                    transition: "opacity 0.15s ease",
+                }}
+                _selected={{
+                    bg: "bg.muted",
+                    _before: { opacity: 1 },
+                }}
+            >
+                <Avatar.Root size="md" colorPalette={palette} flexShrink="0">
+                    {/* Chakra derives the initials from `name` — no local initials helper needed. */}
+                    <Avatar.Fallback name={displayName} />
+                    <Float placement="bottom-end" offsetX="1" offsetY="1">
+                        {/* `data-status` is the stable hook the realtime-presence E2E test asserts
+                            on — it must survive any restyling of this dot. */}
+                        <Circle
+                            data-status={friend.connected ? "online" : "offline"}
+                            aria-label={`${displayName} is ${friend.connected ? "online" : "offline"}`}
+                            bg={friend.connected ? "green.500" : "gray.400"}
+                            size="10px"
+                            outline="0.2em solid"
+                            outlineColor="bg"
+                        />
+                    </Float>
+                </Avatar.Root>
+
+                <VStack flex="1" minW="0" gap="0.5" align="stretch">
+                    <HStack w="100%" gap="2">
                         <Text
                             truncate
-                            w="100%"
-                            fontSize="sm"
+                            flex="1"
                             textAlign="left"
-                            color={{ base: "gray.600", _dark: "gray.400" }}
+                            fontWeight={unread > 0 ? "bold" : "medium"}
                         >
-                            {preview}
+                            {displayName}
                         </Text>
-                    )}
+                        <HStack gap="1" flexShrink="0">
+                            {friend.muted && (
+                                <Icon as={MdNotificationsOff} boxSize="3.5" color="fg.subtle" />
+                            )}
+                            {friend.pinned && (
+                                <Icon as={MdPushPin} boxSize="3.5" color="fg.subtle" />
+                            )}
+                            {unread > 0 && (
+                                <Badge
+                                    // A muted conversation still counts, but stops shouting — the
+                                    // badge drops to neutral instead of the accent color.
+                                    colorPalette={friend.muted ? "gray" : "blue"}
+                                    variant="solid"
+                                    borderRadius="full"
+                                    minW="1.25rem"
+                                    justifyContent="center"
+                                    aria-label={`${unread} unread messages`}
+                                >
+                                    {unread > 99 ? "99+" : unread}
+                                </Badge>
+                            )}
+                        </HStack>
+                    </HStack>
+
+                    <HStack w="100%" gap="2">
+                        <Text
+                            truncate
+                            flex="1"
+                            textAlign="left"
+                            fontSize="sm"
+                            color={unread > 0 ? "fg" : "fg.muted"}
+                            fontStyle={preview ? "normal" : "italic"}
+                        >
+                            {/* Placeholder keeps every row the same height — a list where some rows
+                                have two lines and some have one reads as ragged. */}
+                            {preview || "No messages yet"}
+                        </Text>
+                        {time && (
+                            <Text
+                                fontSize="xs"
+                                flexShrink="0"
+                                color={unread > 0 ? "blue.solid" : "fg.subtle"}
+                                fontWeight={unread > 0 ? "semibold" : "normal"}
+                            >
+                                {time}
+                            </Text>
+                        )}
+                    </HStack>
                 </VStack>
-                {time && (
-                    <Text
-                        fontSize="xs"
-                        flexShrink="0"
-                        alignSelf="start"
-                        pt="1"
-                        color={{ base: "gray.500", _dark: "gray.500" }}
-                    >
-                        {time}
-                    </Text>
-                )}
             </HStack>
-            <Dialog.Root open={open} onOpenChange={(e) => setOpen(e.open)} placement="center">
-                <Dialog.Trigger asChild>
+
+            {/* SIBLING of the trigger, not a child: the row IS a <button> (Tabs.Trigger), and a
+                nested button is invalid HTML. Absolutely positioned into the reserved space. */}
+            {/* lazyMount keeps the menu item out of the DOM until opened — otherwise every row in
+                the list contributes a hidden "Remove <name>" to the accessibility tree. */}
+            <Menu.Root lazyMount unmountOnExit>
+                <Menu.Trigger asChild>
                     <IconButton
-                        aria-label={`Remove ${displayName}`}
+                        aria-label={`Conversation options for ${displayName}`}
                         variant="ghost"
                         size="sm"
-                        colorPalette="red"
+                        position="absolute"
+                        insetEnd="1"
+                        top="50%"
+                        transform="translateY(-50%)"
+                        // Hidden until hover on pointer devices; always visible at `base`, where
+                        // there is no hover to reveal it.
+                        opacity={{ base: 1, md: 0 }}
+                        _groupHover={{ opacity: 1 }}
+                        _focusVisible={{ opacity: 1 }}
+                        _open={{ opacity: 1 }}
                     >
-                        <MdDelete />
+                        <MdMoreVert />
                     </IconButton>
-                </Dialog.Trigger>
+                </Menu.Trigger>
                 <Portal>
-                    <Dialog.Backdrop />
-                    <Dialog.Positioner>
-                        <Dialog.Content>
-                            <Dialog.Header>
-                                <Dialog.Title>Remove {displayName}?</Dialog.Title>
-                            </Dialog.Header>
-                            <Dialog.Body>
-                                <Text>
-                                    This removes {displayName} from your friends and deletes your
-                                    chat history. This cannot be undone.
-                                </Text>
-                            </Dialog.Body>
-                            <Dialog.Footer>
-                                <Dialog.ActionTrigger asChild>
-                                    <Button variant="outline">Cancel</Button>
-                                </Dialog.ActionTrigger>
-                                <Button colorPalette="red" onClick={handleRemove}>
-                                    Remove
-                                </Button>
-                            </Dialog.Footer>
-                            <Dialog.CloseTrigger asChild>
-                                <CloseButton size="sm" />
-                            </Dialog.CloseTrigger>
-                        </Dialog.Content>
-                    </Dialog.Positioner>
+                    <Menu.Positioner>
+                        <Menu.Content>
+                            <Menu.Item
+                                value="remove"
+                                color="fg.error"
+                                _hover={{ bg: "bg.error", color: "fg.error" }}
+                                onSelect={() => setConfirmOpen(true)}
+                            >
+                                <MdDelete />
+                                {/* Accessible name stays `Remove <username>` — friends.spec.js and
+                                    the unit test both match on it. */}
+                                <Box flex="1">Remove {displayName}</Box>
+                            </Menu.Item>
+                        </Menu.Content>
+                    </Menu.Positioner>
                 </Portal>
-            </Dialog.Root>
-        </HStack>
+            </Menu.Root>
+
+            <RemoveFriendDialog friend={friend} open={confirmOpen} onOpenChange={setConfirmOpen} />
+        </Box>
     );
-};
+});

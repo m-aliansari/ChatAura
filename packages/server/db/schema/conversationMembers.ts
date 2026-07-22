@@ -14,12 +14,22 @@ export const conversationMembers = pgTable(
         conversation_id: bigint("conversation_id", { mode: "number" }).notNull(),
         user_id: varchar("user_id").notNull(),
         last_message_id: bigint("last_message_id", { mode: "number" }),
+        // Unread pointer: the newest message this user has read in this conversation. NOT a counter —
+        // the count is DERIVED (messages newer than this, not sent by me). A pointer set with
+        // GREATEST(current, new) is idempotent and commutative, so it converges under concurrent
+        // devices and under a broker's at-least-once redelivery; `unread_count = unread_count + 1`
+        // would corrupt permanently on a single replay. That matters because roadmap principle 4
+        // puts fan-out behind a queue eventually. Null = nothing read yet (everything is unread).
+        last_read_message_id: bigint("last_read_message_id", { mode: "number" }),
         created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-        // Deferred (unread / delivered receipts): last_read_message_id, last_delivered_message_id.
+        // Deferred (delivered receipts): last_delivered_message_id — same pointer shape.
     },
     (t) => [
         primaryKey({ columns: [t.conversation_id, t.user_id] }),
         // The inbox read index: my rows, newest-activity first, no-message convos last by recency.
+        // `last_read_message_id` is deliberately NOT here: it is not a sort key, and widening this
+        // index would cost the read that depends on it. The unread count is served by
+        // `messages_conversation_id_id_idx` instead.
         index("conversation_members_inbox_idx").on(
             t.user_id,
             t.last_message_id.desc().nullsLast(),

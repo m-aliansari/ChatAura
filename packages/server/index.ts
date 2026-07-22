@@ -16,6 +16,7 @@ import { handleSocketAddFriend } from "./utils/socket/handleSocketAddFriend.js";
 import { handleRemoveFriend } from "./utils/socket/handleRemoveFriend.js";
 import { handleLoadOlder } from "./utils/socket/loadOlder.js";
 import { handleLoadMoreFriends } from "./utils/socket/loadMoreFriends.js";
+import { handleMarkRead } from "./utils/socket/markRead.js";
 import { initializeUser } from "./utils/socket/initializeUser.js";
 import { registerDisconnect } from "./utils/socket/registerDisconnect.js";
 import { reconcilePresence } from "./utils/socket/reconcilePresence.js";
@@ -87,6 +88,9 @@ socketio.on("connection", async (socket) => {
     });
     socket.on(SOCKET_EVENTS.LOAD_MORE_FRIENDS, (payload, cb) => {
         handleLoadMoreFriends(socket, payload, cb);
+    });
+    socket.on(SOCKET_EVENTS.MARK_READ, (payload, cb) => {
+        handleMarkRead(socket, payload, cb);
     });
     registerDisconnect(socketio, socket);
     socket.on(SOCKET_EVENTS.TYPING, ({ to }) => {
