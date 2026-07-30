@@ -21,7 +21,12 @@ export const SOCKET_EVENTS = {
     REMOVE_FRIEND: "remove_friend",
     FRIEND_REMOVED: "friend_removed",
     MARK_READ: "mark_read",
-} as const;
+} as const satisfies Record<string, string>;
+
+// Derived union of every socket event string — the cheap, additive precursor to fully typed
+// Socket.io event contracts (see docs/ROADMAP.md "Typed Socket.io event contracts"). `as const`
+// keeps the literal types; `satisfies Record<string, string>` guards against a non-string value.
+export type SocketEvent = (typeof SOCKET_EVENTS)[keyof typeof SOCKET_EVENTS];
 
 export const API_ROUTES = {
     AUTH: {

@@ -115,7 +115,7 @@ describe("GET /auth/login (handleCheckLogin)", () => {
     });
 
     it("confirms a valid token for an existing user", async () => {
-        const user = await insertUser({ username: "erin1" });
+        const user = await insertUser({ username: "erinuser" });
         const token = jwt.sign(
             { username: user.username, user_id: user.user_id, id: user.id },
             "test-secret-key",
