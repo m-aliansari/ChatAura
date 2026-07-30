@@ -88,6 +88,18 @@ jobs:
                   # that playwright.config starts on :4000. Locally this comes from
                   # packages/client/.env (gitignored, absent in CI), so set it here.
                   VITE_API_BASE_URL: http://localhost:4000
+                  # Firebase web config is read from env at build time (src/utils/firebase.js);
+                  # getMessaging() runs at import from App-level UserContextProvider, so without
+                  # these the whole app fails to mount and every E2E test times out. These are
+                  # PUBLIC client identifiers (not secrets) and FCM is disabled server-side in E2E
+                  # — they exist only so Firebase initializes. Locally they come from .env.
+                  VITE_FIREBASE_API_KEY: AIzaSyBr8DFHXWEkdbWil9KWqk6hgKq5IFxDnMw
+                  VITE_FIREBASE_AUTH_DOMAIN: vite-realtime-chatapp.firebaseapp.com
+                  VITE_FIREBASE_PROJECT_ID: vite-realtime-chatapp
+                  VITE_FIREBASE_STORAGE_BUCKET: vite-realtime-chatapp.firebasestorage.app
+                  VITE_FIREBASE_MESSAGING_SENDER_ID: "435490843813"
+                  VITE_FIREBASE_APP_ID: "1:435490843813:web:fbcc3d51f65b4081c9f14c"
+                  VITE_FIREBASE_MEASUREMENT_ID: G-N80XEQW20J
             - name: Upload Playwright report
               if: ${{ failure() }}
               uses: actions/upload-artifact@v4
