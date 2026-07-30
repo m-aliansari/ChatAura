@@ -176,7 +176,7 @@ Server (`packages/server/.env`): `PORT` (defaults to 4000), `JWT_SECRET` (fails 
 - **`DATABASE_SSL=true`** encrypts the Postgres connection — **required by managed Postgres**: RDS sets `rds.force_ssl=1` by default on Postgres 15+ and rejects plaintext connections with `no pg_hba.conf entry for host …, no encryption` (which misleadingly looks like a firewall problem). Local Postgres (Compose, Testcontainers) has no TLS, so this is configuration, not a constant. `DATABASE_CA` (PEM) additionally _verifies_ the server certificate; without it the connection is encrypted but unverified, since Amazon's CA is not in Node's default trust store. Shared by the app pool and the migrator via `db/ssl.ts`.
 - `DATABASE_URL` is used **only** by `drizzle-kit` (migration generation) and as an optional override for `scripts/migrate.ts`; the app runtime connects via the discrete `DATABASE_*` vars.
 
-Client (Vite, `VITE_` prefix required): `VITE_API_BASE_URL`, `VITE_FIREBASE_VAPID_KEY`.
+Client (Vite, `VITE_` prefix required): `VITE_API_BASE_URL`, `VITE_FIREBASE_VAPID_KEY`, and the Firebase web config — `VITE_FIREBASE_{API_KEY,AUTH_DOMAIN,PROJECT_ID,STORAGE_BUCKET,MESSAGING_SENDER_ID,APP_ID,MEASUREMENT_ID}` (public client identifiers, read in `src/utils/firebase.js`; see `packages/client/.env.example`). The `public/firebase-messaging-sw.js` service worker keeps its config **inline** — files under `public/` are copied verbatim and never see `import.meta.env`.
 
 ## Conventions
 

@@ -1,32 +1,31 @@
-import { hash } from "bcrypt";
-import { v4 as uuid } from "uuid";
-import { addUser } from "../../db/repositories/users.js";
 import { addFriendship } from "../../db/repositories/friendships.js";
 import { getConversation } from "../../db/repositories/messages.js";
 import {
     getDirectConversationId,
     getOrCreateDirectConversation,
 } from "../../db/repositories/conversations.js";
+import { registerUser } from "../../services/registerUser.js";
 
 let counter = 0;
 
-/** Inserts a user directly into Postgres and returns its row + plaintext password. */
+/** Creates a user via the domain service and returns its row + plaintext password. */
 export async function insertUser({
     username,
     password = "secret1",
     fullName,
 }: { username?: string; password?: string; fullName?: string } = {}) {
     const name = username ?? `user${Date.now()}${counter++}`;
-    const user_id = uuid();
-    const passhash = await hash(password, 4); // low cost for test speed
-    // addUser bypasses schema validation (direct data-access), so a display name is required here.
-    const user = await addUser({
-        user_id,
+    // Route through registerUser (not addUser directly) so the fixture user satisfies the
+    // credential rules and can log in — see BUG_POSTMORTEMS #3.
+    const result = await registerUser({
         username: name,
-        full_name: fullName ?? "Test User",
-        passhash,
+        password,
+        fullName: fullName ?? "Test User",
     });
-    return { ...user, password };
+    if (!result.ok) {
+        throw new Error(`insertUser failed (${name}): ${result.reason}`);
+    }
+    return { ...result.user, password };
 }
 
 /**

@@ -1,11 +1,14 @@
 # GitGuardian configuration
 # Test files contain dummy fixture credentials (e.g. { username, password })
 # used purely to exercise auth/validation logic — they are NOT real secrets.
-# files and are never committed.
+# The .ts / .int.test.ts globs match the TypeScript server + common suites, so
+# coverage is consistent across JS and TS tests.
 version: 2
 secret:
     ignored-paths:
         - "**/*.test.js"
         - "**/*.test.jsx"
+        - "**/*.test.ts"
+        - "**/*.int.test.ts"
         - "**/test/**"
         - "**/e2e/**"

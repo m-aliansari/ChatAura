@@ -145,7 +145,7 @@ export const SideBar = () => {
                         </VStack>
                         {/* Sits outside Tabs.List: a `role="status"` node inside a `tablist`
                             would not be a valid tab, and screen readers announce it better here. */}
-                        {friendsMeta.loading && <ScrollLoader label="Loading more friends…" />}
+                        {friendsMeta?.loading && <ScrollLoader label="Loading more friends…" />}
                     </>
                 ) : (
                     <VStack flex="1" justify="center" px="6" gap="1" textAlign="center">

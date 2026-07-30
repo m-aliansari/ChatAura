@@ -5,18 +5,22 @@
 // the server process and aren't reachable from the Playwright test process, so
 // seeding has to go through the running server.
 import { Router } from "express";
-import { hash } from "bcrypt";
 import { v4 as uuidv4 } from "uuid";
 import { redisClient } from "../utils/redis.js";
-import { addUser, getUserByUsername } from "../db/repositories/users.js";
+import { getUserByUsername } from "../db/repositories/users.js";
 import { addFriendship } from "../db/repositories/friendships.js";
 import { getOrCreateDirectConversation } from "../db/repositories/conversations.js";
 import { sendMessage } from "../services/sendMessage.js";
+import { registerUser } from "../services/registerUser.js";
 import { getHashMapKey } from "../utils/socket/common.js";
 import { jwtSignPromise } from "../utils/jwt.js";
 
 let seq = 0;
-const uniqName = () => `seed${Date.now().toString().slice(-6)}${seq++}`;
+// Letters-only unique username. Auto-generated seed users default their full_name to the username
+// (so E2E specs can locate rows/tabs by it), and registerUser's fullName rule forbids digits — so
+// the generated username must itself be a valid full_name. Digits are mapped to letters.
+const toLetters = (n: number) => String(n).replace(/[0-9]/g, (d) => "abcdefghij"[Number(d)]);
+const uniqName = () => `seed${toLetters(Date.now())}${toLetters(seq++)}`;
 
 // Find-or-create a Postgres user and mirror the Redis presence hash that
 // initializeUser would create on connect (so add-friend lookups and the
@@ -36,15 +40,21 @@ async function ensureUser({
 
     let user = await getUserByUsername(name);
     if (!user) {
-        const passhash = await hash(password, 4);
-        // full_name defaults to the username so specs that match the list by username keep working;
-        // pass fullName explicitly to exercise the display-name rendering.
-        user = await addUser({
-            user_id: uuidv4(),
+        // Create through the domain service (not addUser directly) so a seeded user always
+        // satisfies the credential rules and can actually log in — see BUG_POSTMORTEMS #3.
+        // full_name defaults to the username so specs that match the list by username keep working
+        // (auto-generated usernames are letters-only, so this is exact); for a caller that passes an
+        // explicit digit-bearing username, strip the characters the fullName rule forbids — its
+        // display name isn't asserted. Pass fullName explicitly to exercise real display names.
+        const result = await registerUser({
             username: name,
-            full_name: fullName ?? name,
-            passhash,
+            password,
+            fullName: fullName ?? (name.replace(/[^\p{L} .'-]/gu, "") || "Seed User"),
         });
+        if (!result.ok) {
+            throw new Error(`seed user creation failed (${name}): ${result.reason}`);
+        }
+        user = result.user;
     }
 
     await redisClient.hSet(getHashMapKey(user.username), {
